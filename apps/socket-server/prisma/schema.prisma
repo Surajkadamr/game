@@ -1,0 +1,74 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Player {
+  id        String   @id @default(uuid())
+  name      String
+  email     String?  @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sessions  GameSession[]
+  handHistories HandHistory[]
+
+  @@map("players")
+}
+
+model Table {
+  id          String   @id @default(uuid())
+  name        String
+  maxPlayers  Int      @default(6)
+  smallBlind  Int      // paise
+  bigBlind    Int      // paise
+  minBuyIn    Int      // paise
+  maxBuyIn    Int      // paise
+  isPrivate   Boolean  @default(false)
+  passwordHash String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  sessions    GameSession[]
+  hands       HandHistory[]
+
+  @@map("tables")
+}
+
+model GameSession {
+  id          String   @id @default(uuid())
+  tableId     String
+  playerId    String
+  buyIn       Int      // paise
+  cashOut     Int?     // paise
+  netProfit   Int?     // paise
+  startedAt   DateTime @default(now())
+  endedAt     DateTime?
+
+  table  Table  @relation(fields: [tableId], references: [id])
+  player Player @relation(fields: [playerId], references: [id])
+
+  @@map("game_sessions")
+}
+
+model HandHistory {
+  id           String   @id @default(uuid())
+  tableId      String
+  handNumber   Int
+  playersJson  Json     // snapshot of players at hand start
+  actionsJson  Json     // full action history
+  communityCardsJson Json
+  winnersJson  Json
+  potAmount    Int      // paise
+  playedAt     DateTime @default(now())
+
+  table  Table    @relation(fields: [tableId], references: [id])
+  player Player[]
+
+  @@map("hand_histories")
+}
