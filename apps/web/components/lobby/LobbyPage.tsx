@@ -22,12 +22,15 @@ interface LobbyPageProps {
   isConnected: boolean;
 }
 
-export function LobbyPage({ tables, playerName: propPlayerName, onJoinTable, onCreateTable, onRefresh, onChangeName, isConnected }: LobbyPageProps) {
+export function LobbyPage({ tables: allTables, playerName: propPlayerName, onJoinTable, onCreateTable, onRefresh, onChangeName, isConnected }: LobbyPageProps) {
   const [showJoinModal, setShowJoinModal] = useState<TableSummary | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [playerName, setPlayerName] = useState(propPlayerName);
   const [buyIn, setBuyIn] = useState(10000); // ₹100 default
   const [savedName, setSavedName] = useState(propPlayerName);
+
+  // Only show tables that have at least 1 player (clear empty/abandoned tables)
+  const tables = allTables.filter((t) => t.playerCount > 0);
 
   useEffect(() => {
     if (isConnected) onRefresh();
@@ -57,65 +60,66 @@ export function LobbyPage({ tables, playerName: propPlayerName, onJoinTable, onC
   };
 
   return (
-    <div className="relative min-h-screen flex flex-col overflow-hidden">
+    <div className="relative h-screen flex flex-col overflow-hidden">
       <ParticleBackground />
 
       {/* Header */}
       <header
-        className="relative z-10 flex items-center justify-between px-8 py-5 glass-dark"
+        className="relative z-10 flex items-center justify-between px-4 sm:px-8 py-3 sm:py-5 glass-dark"
         style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}
       >
-        <div className="flex items-center gap-3">
-          <span className="text-5xl">♠</span>
+        <div className="flex items-center gap-2 sm:gap-3">
+          <span className="text-3xl sm:text-5xl">♠</span>
           <div>
-            <h1 className="font-display text-3xl font-bold text-gold">KADAM POKER</h1>
-            <p className="text-xs text-white/30 uppercase tracking-widest">Premium No-Limit Texas Hold'em</p>
+            <h1 className="font-display text-xl sm:text-3xl font-bold text-gold">KADAM POKER</h1>
+            <p className="hidden sm:block text-xs text-white/30 uppercase tracking-widest">Premium No-Limit Texas Hold'em</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 sm:gap-4">
+          <div className="flex items-center gap-1.5">
             <div
               className="w-2 h-2 rounded-full"
               style={{ background: isConnected ? '#38a169' : '#ef4444' }}
             />
-            <span className="text-xs text-white/40">
+            <span className="text-xs text-white/40 hidden sm:block">
               {isConnected ? 'Connected' : 'Connecting...'}
             </span>
           </div>
           <button
             onClick={onChangeName}
-            className="px-4 py-2 rounded-xl text-sm text-white/50 hover:text-white/80 glass hover:glass-gold transition-all"
+            className="px-2 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm text-white/50 hover:text-white/80 glass hover:glass-gold transition-all"
           >
             ✎ {savedName}
           </button>
           <button
             onClick={() => setShowCreateModal(true)}
-            className="px-5 py-2.5 rounded-xl font-bold text-sm uppercase tracking-wider btn-raise"
+            className="px-3 sm:px-5 py-1.5 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm uppercase tracking-wider btn-raise"
           >
-            + Create Table
+            + Create
           </button>
         </div>
       </header>
 
       {/* Main */}
-      <main className="relative z-10 flex-1 px-8 py-8">
-        <div className="max-w-5xl mx-auto">
+      <main className="relative z-10 flex-1 px-4 sm:px-8 py-4 sm:py-8 overflow-hidden flex flex-col">
+        <div className="max-w-5xl mx-auto w-full flex flex-col flex-1 min-h-0">
           {/* Section header */}
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between mb-4 sm:mb-6 flex-shrink-0">
             <div>
-              <h2 className="font-display text-2xl font-bold text-white">Active Tables</h2>
-              <p className="text-sm text-white/30 mt-0.5">{tables.length} tables available</p>
+              <h2 className="font-display text-xl sm:text-2xl font-bold text-white">Active Tables</h2>
+              <p className="text-xs sm:text-sm text-white/30 mt-0.5">{tables.length} table{tables.length !== 1 ? 's' : ''} available</p>
             </div>
             <button
               onClick={onRefresh}
-              className="px-4 py-2 rounded-lg text-sm text-white/50 hover:text-white/80 glass hover:glass-gold transition-all"
+              className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm text-white/50 hover:text-white/80 glass hover:glass-gold transition-all"
             >
               ↺ Refresh
             </button>
           </div>
 
-          {/* Table Grid */}
+          {/* Table Grid — scrollable when many tables */}
+          <div className="flex-1 overflow-y-auto min-h-0 pr-0.5">
           <AnimatePresence>
             {tables.length === 0 ? (
               <motion.div
@@ -124,11 +128,11 @@ export function LobbyPage({ tables, playerName: propPlayerName, onJoinTable, onC
                 className="text-center py-20"
               >
                 <div className="text-6xl mb-4 opacity-20">♣</div>
-                <p className="text-white/30 font-semibold">No tables yet</p>
+                <p className="text-white/30 font-semibold">No active tables</p>
                 <p className="text-white/20 text-sm mt-1">Create one to start playing</p>
               </motion.div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 pb-4">
                 {tables.map((table, i) => (
                   <motion.div
                     key={table.id}
@@ -201,6 +205,7 @@ export function LobbyPage({ tables, playerName: propPlayerName, onJoinTable, onC
               </div>
             )}
           </AnimatePresence>
+          </div>
         </div>
       </main>
 

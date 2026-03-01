@@ -139,11 +139,11 @@ export function PokerTable({ onAction, onLeave }: PokerTableProps) {
 
   const { players, communityCards, pots, config, phase, activePlayerSeatIndex } = gameState;
 
-  // On mobile the action panel (pb-48 = 192px) and header (h-14 = 56px) eat into space.
-  // Shift the oval center up and shrink radii so seats don't overlap those elements.
+  // On mobile: header=48px, action panel=~140px → available ≈ 467px on 667px screen.
+  // Visual table center ≈ 43% of screen. ry=20 keeps "you" seat at ~63% (well above panel).
   const seatPositions = getSeatPositions(
     config.maxPlayers,
-    isMobile ? { cy: 42, ry: 26, rx: 40 } : { cy: 50, ry: 36, rx: 42 },
+    isMobile ? { cy: 43, ry: 20, rx: 37 } : { cy: 50, ry: 36, rx: 42 },
   );
 
   // Rotate visual positions so the local player always appears at seat slot 0 (bottom-center).
@@ -175,13 +175,14 @@ export function PokerTable({ onAction, onLeave }: PokerTableProps) {
       <ParticleBackground />
 
       {/* Main Layout */}
-      <div className="relative w-full h-full flex items-center justify-center pt-14 pb-48 sm:pb-0" style={{ zIndex: 1 }}>
+      {/* pt matches 44px header; pb-36 reserves space for the action panel on mobile */}
+      <div className="relative w-full h-full flex items-center justify-center pt-11 pb-36 sm:pt-14 sm:pb-0" style={{ zIndex: 1 }}>
         {/* ─── Poker Table Oval ─────────────────────────────────────────── */}
         <div
           className="relative poker-table"
           style={{
-            width: isMobile ? 'min(98vw, 900px)' : 'min(72vw, 900px)',
-            height: isMobile ? 'min(38vh, 400px)' : 'min(50vh, 500px)',
+            width: isMobile ? 'min(94vw, 900px)' : 'min(72vw, 900px)',
+            height: isMobile ? 'min(29vh, 240px)' : 'min(50vh, 500px)',
             borderRadius: '50%',
             border: '20px solid transparent',
             borderImage: 'none',
@@ -398,22 +399,24 @@ export function PokerTable({ onAction, onLeave }: PokerTableProps) {
 
       {/* ─── Header Bar ──────────────────────────────────────────────────── */}
       <div
-        className="fixed top-0 left-0 right-0 h-14 glass-dark flex items-center px-4 justify-between"
-        style={{ zIndex: 40, borderBottom: '1px solid rgba(255,255,255,0.06)' }}
+        className="fixed top-0 left-0 right-0 glass-dark flex items-center px-3 sm:px-4 justify-between"
+        style={{ zIndex: 40, height: 44, borderBottom: '1px solid rgba(255,255,255,0.06)' }}
       >
-        <div className="flex items-center gap-3">
-          <span className="font-display text-gold font-bold text-lg">♠ KADAM</span>
-          <div className="h-4 w-px" style={{ background: 'rgba(255,255,255,0.1)' }} />
-          <span className="text-white/40 text-sm">{gameState.config.name}</span>
+        {/* Left: brand + table name */}
+        <div className="flex items-center gap-1.5 min-w-0 flex-1">
+          <span className="font-display text-gold font-bold text-sm sm:text-lg flex-shrink-0">♠ KADAM</span>
+          <div className="h-3 w-px flex-shrink-0" style={{ background: 'rgba(255,255,255,0.15)' }} />
+          <span className="text-white/40 text-xs truncate">{gameState.config.name}</span>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="hidden sm:block text-xs text-white/30">
-            Blinds: ₹{config.smallBlind / 100}/₹{config.bigBlind / 100}
-          </div>
-          <div className="hidden sm:block text-xs text-white/30">
-            Hand #{gameState.handNumber}
-          </div>
+        {/* Center: blinds (desktop only) */}
+        <div className="hidden sm:flex items-center gap-3 text-xs text-white/30 flex-shrink-0 mx-4">
+          <span>₹{config.smallBlind / 100}/₹{config.bigBlind / 100}</span>
+          <span>#{gameState.handNumber}</span>
+        </div>
+
+        {/* Right: voice + leave — always visible, compact */}
+        <div className="flex items-center gap-1.5 flex-shrink-0">
           <VoicePanel
             isInVoice={isInVoice}
             isMuted={isMuted}
@@ -425,11 +428,14 @@ export function PokerTable({ onAction, onLeave }: PokerTableProps) {
             onLeave={leaveVoice}
             onToggleMute={toggleMute}
           />
+          {/* Mobile: icon-only leave button; desktop: text */}
           <button
             onClick={onLeave}
-            className="px-3 py-1.5 rounded-lg text-xs font-semibold text-red-400/70 hover:text-red-400 hover:bg-red-400/10 transition-all"
+            className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold text-red-400/70 hover:text-red-400 hover:bg-red-400/10 transition-all"
+            title="Leave Table"
           >
-            Leave Table
+            <span className="sm:hidden">✕</span>
+            <span className="hidden sm:inline">Leave Table</span>
           </button>
         </div>
       </div>

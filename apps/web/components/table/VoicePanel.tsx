@@ -14,6 +14,19 @@ interface VoicePanelProps {
   onToggleMute: () => void;
 }
 
+// Shared button size: 30×30 to fit the 44px header on mobile
+const BTN = {
+  width: 30,
+  height: 30,
+  borderRadius: 8,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  fontSize: 14,
+  transition: 'opacity 0.15s, box-shadow 0.15s',
+  flexShrink: 0,
+} as const;
+
 export function VoicePanel({
   isInVoice,
   isMuted,
@@ -30,84 +43,101 @@ export function VoicePanel({
       <button
         onClick={onJoin}
         title={micError ?? 'Join voice chat'}
-        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all"
         style={{
-          background: 'rgba(255,255,255,0.06)',
-          border: `1px solid ${micError ? 'rgba(239,68,68,0.3)' : 'rgba(255,255,255,0.1)'}`,
-          color: micError ? '#ef4444' : 'rgba(255,255,255,0.45)',
+          ...BTN,
+          background: micError ? 'rgba(239,68,68,0.12)' : 'rgba(255,255,255,0.07)',
+          border: `1px solid ${micError ? 'rgba(239,68,68,0.35)' : 'rgba(255,255,255,0.12)'}`,
+          color: micError ? '#ef4444' : 'rgba(255,255,255,0.5)',
         }}
       >
-        <span>{micError ? '🚫' : '🎙️'}</span>
-        <span className="hidden sm:block">{micError ? 'Mic denied' : 'Voice'}</span>
+        {micError ? '🚫' : '🎙️'}
       </button>
     );
   }
 
   return (
-    <div className="flex items-center gap-1.5">
+    <div className="flex items-center gap-1">
       {/* Mute / unmute */}
       <button
         onClick={onToggleMute}
-        title={isMuted ? 'Unmute' : 'Mute'}
-        className="w-8 h-8 rounded-lg flex items-center justify-center text-sm transition-all"
+        title={isMuted ? 'Unmute' : 'Mute mic'}
         style={{
+          ...BTN,
           background: isMuted
-            ? 'rgba(239,68,68,0.18)'
+            ? 'rgba(239,68,68,0.2)'
             : isSpeaking
-            ? 'rgba(56,161,105,0.22)'
+            ? 'rgba(56,161,105,0.25)'
             : 'rgba(255,255,255,0.07)',
           border: isMuted
-            ? '1px solid rgba(239,68,68,0.35)'
+            ? '1px solid rgba(239,68,68,0.4)'
             : isSpeaking
-            ? '1px solid rgba(56,161,105,0.45)'
-            : '1px solid rgba(255,255,255,0.1)',
-          boxShadow: isSpeaking && !isMuted ? '0 0 8px rgba(56,161,105,0.4)' : 'none',
+            ? '1px solid rgba(56,161,105,0.5)'
+            : '1px solid rgba(255,255,255,0.12)',
+          boxShadow: isSpeaking && !isMuted ? '0 0 8px rgba(56,161,105,0.45)' : 'none',
         }}
       >
         {isMuted ? '🔇' : '🎙️'}
       </button>
 
-      {/* Peer avatars */}
+      {/* Peer count badge — compact on mobile, avatars on desktop */}
       {voicePeers.length > 0 && (
-        <div className="flex items-center -space-x-1.5">
-          {voicePeers.slice(0, 4).map((peer) => {
-            const speaking = speakingPeers.has(peer.peerId);
-            return (
+        <>
+          {/* Mobile: just a small count bubble */}
+          <span
+            className="sm:hidden text-[10px] font-bold rounded-full px-1.5 py-0.5"
+            style={{
+              background: 'rgba(56,161,105,0.2)',
+              border: '1px solid rgba(56,161,105,0.35)',
+              color: '#38a169',
+            }}
+          >
+            {voicePeers.length}
+          </span>
+
+          {/* Desktop: avatar stack */}
+          <div className="hidden sm:flex items-center -space-x-1.5">
+            {voicePeers.slice(0, 3).map((peer) => {
+              const speaking = speakingPeers.has(peer.peerId);
+              return (
+                <div
+                  key={peer.peerId}
+                  title={peer.playerName}
+                  className="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold text-white"
+                  style={{
+                    background: speaking ? '#16a34a' : '#374151',
+                    border: '1.5px solid rgba(0,0,0,0.5)',
+                    boxShadow: speaking ? '0 0 6px rgba(22,163,74,0.7)' : 'none',
+                    transition: 'background 0.2s, box-shadow 0.2s',
+                  }}
+                >
+                  {peer.playerName[0]?.toUpperCase()}
+                </div>
+              );
+            })}
+            {voicePeers.length > 3 && (
               <div
-                key={peer.peerId}
-                title={peer.playerName}
-                className="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold text-white"
-                style={{
-                  background: speaking ? '#16a34a' : '#374151',
-                  border: '1.5px solid rgba(0,0,0,0.5)',
-                  boxShadow: speaking ? '0 0 6px rgba(22,163,74,0.7)' : 'none',
-                  transition: 'background 0.2s, box-shadow 0.2s',
-                }}
+                className="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold text-white/50"
+                style={{ background: '#1f2937', border: '1.5px solid rgba(0,0,0,0.5)' }}
               >
-                {peer.playerName[0]?.toUpperCase()}
+                +{voicePeers.length - 3}
               </div>
-            );
-          })}
-          {voicePeers.length > 4 && (
-            <div
-              className="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold text-white/50"
-              style={{ background: '#1f2937', border: '1.5px solid rgba(0,0,0,0.5)' }}
-            >
-              +{voicePeers.length - 4}
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        </>
       )}
 
       {/* Leave voice */}
       <button
         onClick={onLeave}
-        title="Leave voice"
-        className="w-7 h-7 rounded-lg flex items-center justify-center text-xs transition-all"
+        title="Leave voice chat"
         style={{
+          ...BTN,
+          width: 26,
+          height: 26,
           background: 'rgba(239,68,68,0.1)',
-          border: '1px solid rgba(239,68,68,0.2)',
-          color: 'rgba(239,68,68,0.7)',
+          border: '1px solid rgba(239,68,68,0.25)',
+          color: 'rgba(239,68,68,0.8)',
+          fontSize: 11,
         }}
       >
         ✕
