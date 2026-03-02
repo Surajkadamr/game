@@ -8,7 +8,7 @@ import type { Card as CardType } from '@kadam/shared';
 interface CardProps {
   card?: CardType;
   isBack?: boolean;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'xs' | 'sm' | 'md' | 'lg';
   className?: string;
   style?: React.CSSProperties;
   fanned?: boolean;
@@ -19,6 +19,7 @@ interface CardProps {
 }
 
 const SIZE_MAP = {
+  xs: { width: 38, height: 54, rankSize: 9, suitSize: 20 },
   sm: { width: 52, height: 74, rankSize: 12, suitSize: 28 },
   md: { width: 66, height: 94, rankSize: 15, suitSize: 36 },
   lg: { width: 84, height: 118, rankSize: 19, suitSize: 48 },
@@ -111,7 +112,7 @@ interface CommunityCardSlotProps {
 }
 
 export function CommunityCardSlot({ card, index, revealed = false, compact = false }: CommunityCardSlotProps) {
-  const size = compact ? 'md' : 'lg';
+  const size = compact ? 'xs' : 'lg';
   const { width, height } = SIZE_MAP[size];
 
   if (!card) {

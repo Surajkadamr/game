@@ -139,11 +139,12 @@ export function PokerTable({ onAction, onLeave }: PokerTableProps) {
 
   const { players, communityCards, pots, config, phase, activePlayerSeatIndex } = gameState;
 
-  // On mobile: header=48px, action panel=~140px → available ≈ 467px on 667px screen.
-  // Visual table center ≈ 43% of screen. ry=20 keeps "you" seat at ~63% (well above panel).
+  // On mobile: vertical oval — header=44px, action panel=~140px → usable ≈ 483px.
+  // Table center at 43% (≈287px). ry=23 puts seat-0 (me) at 66% (≈440px, well above action panel).
+  // rx=35 keeps left/right seats at 15% and 85% of screen width.
   const seatPositions = getSeatPositions(
     config.maxPlayers,
-    isMobile ? { cy: 43, ry: 20, rx: 37 } : { cy: 50, ry: 36, rx: 42 },
+    isMobile ? { cy: 43, ry: 23, rx: 35 } : { cy: 50, ry: 36, rx: 42 },
   );
 
   // Rotate visual positions so the local player always appears at seat slot 0 (bottom-center).
@@ -181,8 +182,8 @@ export function PokerTable({ onAction, onLeave }: PokerTableProps) {
         <div
           className="relative poker-table"
           style={{
-            width: isMobile ? 'min(94vw, 900px)' : 'min(72vw, 900px)',
-            height: isMobile ? 'min(29vh, 240px)' : 'min(50vh, 500px)',
+            width: isMobile ? 'min(58vw, 220px)' : 'min(72vw, 900px)',
+            height: isMobile ? 'min(46vh, 360px)' : 'min(50vh, 500px)',
             borderRadius: '50%',
             border: '20px solid transparent',
             borderImage: 'none',

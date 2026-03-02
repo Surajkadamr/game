@@ -23,6 +23,7 @@ const BTN = {
   alignItems: 'center',
   justifyContent: 'center',
   fontSize: 14,
+  cursor: 'pointer',
   transition: 'opacity 0.15s, box-shadow 0.15s',
   flexShrink: 0,
 } as const;
@@ -41,6 +42,7 @@ export function VoicePanel({
   if (!isInVoice) {
     return (
       <button
+        type="button"
         onClick={onJoin}
         title={micError ?? 'Join voice chat'}
         style={{
@@ -57,26 +59,42 @@ export function VoicePanel({
 
   return (
     <div className="flex items-center gap-1">
-      {/* Mute / unmute */}
+      {/* Mute / unmute — wider on mobile so it's easy to tap */}
       <button
+        type="button"
         onClick={onToggleMute}
-        title={isMuted ? 'Unmute' : 'Mute mic'}
+        title={isMuted ? 'Tap to unmute' : 'Tap to mute'}
         style={{
           ...BTN,
+          width: isMuted ? 52 : 30,   // widen when muted so the label "MUTED" fits
+          gap: 3,
+          paddingLeft: isMuted ? 6 : 0,
+          paddingRight: isMuted ? 6 : 0,
           background: isMuted
-            ? 'rgba(239,68,68,0.2)'
+            ? 'rgba(239,68,68,0.25)'
             : isSpeaking
             ? 'rgba(56,161,105,0.25)'
             : 'rgba(255,255,255,0.07)',
           border: isMuted
-            ? '1px solid rgba(239,68,68,0.4)'
+            ? '1px solid rgba(239,68,68,0.5)'
             : isSpeaking
             ? '1px solid rgba(56,161,105,0.5)'
             : '1px solid rgba(255,255,255,0.12)',
-          boxShadow: isSpeaking && !isMuted ? '0 0 8px rgba(56,161,105,0.45)' : 'none',
+          color: isMuted ? '#f87171' : isSpeaking ? '#4ade80' : 'rgba(255,255,255,0.5)',
+          boxShadow: isMuted
+            ? '0 0 8px rgba(239,68,68,0.3)'
+            : isSpeaking
+            ? '0 0 8px rgba(56,161,105,0.45)'
+            : 'none',
+          fontSize: 13,
         }}
       >
-        {isMuted ? '🔇' : '🎙️'}
+        <span>{isMuted ? '🔇' : '🎙️'}</span>
+        {isMuted && (
+          <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.04em' }}>
+            MUTED
+          </span>
+        )}
       </button>
 
       {/* Peer count badge — compact on mobile, avatars on desktop */}
@@ -128,6 +146,7 @@ export function VoicePanel({
 
       {/* Leave voice */}
       <button
+        type="button"
         onClick={onLeave}
         title="Leave voice chat"
         style={{

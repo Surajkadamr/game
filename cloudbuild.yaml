@@ -3,6 +3,9 @@ substitutions:
   _REPO: asia-south1-docker.pkg.dev/$PROJECT_ID/kadam
   _SOCKET_URL: https://kadam-socket-server-placeholder.run.app  # override at trigger level
   _APP_URL: https://kadam-web-placeholder.run.app               # override at trigger level
+  _TURN_URL: ''         # optional: comma-separated TURN URLs (leave empty to use public fallback)
+  _TURN_USERNAME: ''    # optional: TURN username
+  _TURN_CREDENTIAL: ''  # optional: TURN credential
 
 steps:
   # ── Build socket-server image ────────────────────────────────────────────
@@ -33,6 +36,12 @@ steps:
       - 'NEXT_PUBLIC_SOCKET_URL=${_SOCKET_URL}'
       - '--build-arg'
       - 'NEXT_PUBLIC_APP_URL=${_APP_URL}'
+      - '--build-arg'
+      - 'NEXT_PUBLIC_TURN_URL=${_TURN_URL}'
+      - '--build-arg'
+      - 'NEXT_PUBLIC_TURN_USERNAME=${_TURN_USERNAME}'
+      - '--build-arg'
+      - 'NEXT_PUBLIC_TURN_CREDENTIAL=${_TURN_CREDENTIAL}'
       - '.'
     waitFor: ['-']  # run in parallel with build-socket
 
