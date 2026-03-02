@@ -224,17 +224,15 @@ export function useVoiceChat(tableId: string | null, playerId: string | null) {
       };
     }
 
-    return pc;
-
     // ── ICE restart helper (scoped to this peer conn) ─────────────────────
     async function doIceRestart(conn: RTCPeerConnection, pid: string) {
-      if (conn.signalingState === 'closed') return;
+      if ((conn.connectionState as string) === 'closed') return;
       if (makingOfferRef.current.has(pid)) return;
       makingOfferRef.current.add(pid);
       console.log(`[Voice] ICE restart → ${pid}`);
       try {
         const offer = await conn.createOffer({ iceRestart: true });
-        if (conn.signalingState === 'closed') return;
+        if ((conn.connectionState as string) === 'closed') return;
         await conn.setLocalDescription(offer);
         const { getSocket } = require('@/lib/socket');
         getSocket().emit('voice:signal', {
@@ -249,6 +247,8 @@ export function useVoiceChat(tableId: string | null, playerId: string | null) {
         makingOfferRef.current.delete(pid);
       }
     }
+
+    return pc;
   }, [startRemoteSpeakDetect, closePeer]);
 
   // ── Socket event listeners ────────────────────────────────────────────────

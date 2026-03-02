@@ -450,10 +450,9 @@ button, [role="button"] {
     height: 28px;
   }
 
-  /* Vertical oval is narrow — shrink the watermark text to fit */
   .poker-table::after {
-    font-size: 10px;
-    letter-spacing: 0.1em;
+    font-size: 14px;
+    letter-spacing: 0.15em;
   }
 }
 

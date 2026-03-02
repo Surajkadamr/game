@@ -139,12 +139,14 @@ export function PokerTable({ onAction, onLeave }: PokerTableProps) {
 
   const { players, communityCards, pots, config, phase, activePlayerSeatIndex } = gameState;
 
-  // On mobile: vertical oval — header=44px, action panel=~140px → usable ≈ 483px.
-  // Table center at 43% (≈287px). ry=23 puts seat-0 (me) at 66% (≈440px, well above action panel).
-  // rx=35 keeps left/right seats at 15% and 85% of screen width.
+  // Seats are positioned as % of the table oval container.
+  // Seat 0 (local player) = bottom-center; others go counter-clockwise.
+  // rx/ry ≈ 50 places seats right on the oval edge.
   const seatPositions = getSeatPositions(
     config.maxPlayers,
-    isMobile ? { cy: 43, ry: 23, rx: 35 } : { cy: 50, ry: 36, rx: 42 },
+    isMobile
+      ? { cx: 50, cy: 50, rx: 48, ry: 48 }
+      : { cx: 50, cy: 50, rx: 48, ry: 47 },
   );
 
   // Rotate visual positions so the local player always appears at seat slot 0 (bottom-center).
@@ -175,26 +177,25 @@ export function PokerTable({ onAction, onLeave }: PokerTableProps) {
       {/* Particle Background */}
       <ParticleBackground />
 
-      {/* Main Layout */}
-      {/* pt matches 44px header; pb-36 reserves space for the action panel on mobile */}
-      <div className="relative w-full h-full flex items-center justify-center pt-11 pb-36 sm:pt-14 sm:pb-0" style={{ zIndex: 1 }}>
+      {/* Main Layout — table fills available space between header and action panel */}
+      <div className="relative w-full h-full flex items-center justify-center" style={{ zIndex: 1, paddingTop: 44, paddingBottom: isMobile ? 140 : 0 }}>
         {/* ─── Poker Table Oval ─────────────────────────────────────────── */}
+        {/* The table is the positioning parent for seats — they sit on its edge */}
         <div
           className="relative poker-table"
           style={{
-            width: isMobile ? 'min(58vw, 220px)' : 'min(72vw, 900px)',
-            height: isMobile ? 'min(46vh, 360px)' : 'min(50vh, 500px)',
+            width: isMobile ? 'min(92vw, 420px)' : 'min(80vw, 950px)',
+            height: isMobile ? 'min(58vh, 440px)' : 'min(55vh, 540px)',
             borderRadius: '50%',
-            border: '20px solid transparent',
-            borderImage: 'none',
+            border: 'none',
             boxShadow: `
-              0 0 0 20px #1a0f08,
-              0 0 0 22px #2c1810,
-              0 0 0 25px #1a0f08,
-              inset 0 0 80px rgba(0,0,0,0.5),
+              0 0 0 8px #1a0f08,
+              0 0 0 10px #2c1810,
+              0 0 0 12px rgba(201,168,76,0.15),
+              0 0 0 14px #1a0f08,
+              inset 0 0 60px rgba(0,0,0,0.5),
               inset 0 0 20px rgba(201,168,76,0.05),
-              0 20px 80px rgba(0,0,0,0.8),
-              0 0 40px rgba(0,0,0,0.6)
+              0 20px 80px rgba(0,0,0,0.8)
             `,
           }}
         >
@@ -204,7 +205,7 @@ export function PokerTable({ onAction, onLeave }: PokerTableProps) {
               cards={communityCards}
               pots={pots}
               round={gameState.round}
-              compact={isMobile}
+              compact={false}
             />
           </div>
 
@@ -354,33 +355,33 @@ export function PokerTable({ onAction, onLeave }: PokerTableProps) {
               </motion.div>
             )}
           </AnimatePresence>
+
+          {/* ─── Player Seats (positioned on the oval edge) ────────────── */}
+          {players.map((player) => {
+            const pos = getVisualPos(player.seatIndex);
+            const isMe = player.id === playerId;
+            const isActive = player.seatIndex === activePlayerSeatIndex;
+
+            return (
+              <PlayerSeat
+                key={player.id}
+                player={player}
+                isMe={isMe}
+                isActive={isActive}
+                myHoleCards={isMe ? myHoleCards : undefined}
+                timeRemainingMs={isActive && timerForActive ? timerForActive.timeRemainingMs : undefined}
+                totalTimeMs={isActive && timerForActive ? timerForActive.totalMs : 15000}
+                position={{ x: pos.x, y: pos.y }}
+                compact={isMobile}
+                isSpeaking={
+                  isMe
+                    ? isSpeaking && isInVoice
+                    : isInVoice && speakingPeers.has(player.id)
+                }
+              />
+            );
+          })}
         </div>
-
-        {/* ─── Player Seats ──────────────────────────────────────────────── */}
-        {players.map((player) => {
-          const pos = getVisualPos(player.seatIndex);
-          const isMe = player.id === playerId;
-          const isActive = player.seatIndex === activePlayerSeatIndex;
-
-          return (
-            <PlayerSeat
-              key={player.id}
-              player={player}
-              isMe={isMe}
-              isActive={isActive}
-              myHoleCards={isMe ? myHoleCards : undefined}
-              timeRemainingMs={isActive && timerForActive ? timerForActive.timeRemainingMs : undefined}
-              totalTimeMs={isActive && timerForActive ? timerForActive.totalMs : 15000}
-              position={{ x: pos.x, y: pos.y }}
-              compact={isMobile}
-              isSpeaking={
-                isMe
-                  ? isSpeaking && isInVoice
-                  : isInVoice && speakingPeers.has(player.id)
-              }
-            />
-          );
-        })}
 
         {/* ─── Last Action Text ──────────────────────────────────────────── */}
         <AnimatePresence>
