@@ -32,8 +32,8 @@ services:
 
   socket-server:
     build:
-      context: ./apps/socket-server
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: apps/socket-server/Dockerfile
     ports:
       - "3001:3001"
     environment:
@@ -51,8 +51,8 @@ services:
 
   web:
     build:
-      context: ./apps/web
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: apps/web/Dockerfile
     ports:
       - "3000:3000"
     environment:

@@ -215,12 +215,16 @@ docker build \
   -f apps/web/Dockerfile \
   --build-arg NEXT_PUBLIC_SOCKET_URL=$SOCKET_URL \
   --build-arg NEXT_PUBLIC_APP_URL=https://kadam-web-placeholder.run.app \
+  --build-arg NEXT_PUBLIC_TURN_URL= \
+  --build-arg NEXT_PUBLIC_TURN_USERNAME= \
+  --build-arg NEXT_PUBLIC_TURN_CREDENTIAL= \
   .
 
 docker push $REPO/web:latest
 ```
 
 > `NEXT_PUBLIC_APP_URL` is a placeholder for now. We'll update it after the web URL is known. The app doesn't rely on it for core game functionality.
+> The TURN args are optional — leave empty to use the built-in public TURN relay (`openrelay.metered.ca`). Set them if you run your own Coturn server.
 
 ---
 
@@ -371,9 +375,12 @@ gcloud projects add-iam-policy-binding $PROJECT_ID \
    |---|---|
    | `_SOCKET_URL` | your socket server URL (from Step 7) |
    | `_APP_URL` | your web URL (from Step 9) |
+   | `_TURN_URL` | *(optional)* custom TURN URLs, comma-separated |
+   | `_TURN_USERNAME` | *(optional)* TURN username |
+   | `_TURN_CREDENTIAL` | *(optional)* TURN credential |
 6. Click **Create**
 
-> These variables tell Cloud Build which URLs to bake into the Next.js build. After a custom domain is set up (Step 14), update them in the trigger.
+> `_SOCKET_URL` and `_APP_URL` are required. The TURN variables are optional — leave blank to use the built-in public TURN relay. After a custom domain is set up (Step 14), update `_SOCKET_URL` and `_APP_URL` in the trigger.
 
 After each `git push` to `main`, Cloud Build will automatically:
 1. Build both Docker images in parallel
@@ -421,6 +428,9 @@ docker build \
   -f apps/web/Dockerfile \
   --build-arg NEXT_PUBLIC_SOCKET_URL=https://socket.kadam.poker \
   --build-arg NEXT_PUBLIC_APP_URL=https://kadam.poker \
+  --build-arg NEXT_PUBLIC_TURN_URL= \
+  --build-arg NEXT_PUBLIC_TURN_USERNAME= \
+  --build-arg NEXT_PUBLIC_TURN_CREDENTIAL= \
   .
 docker push $REPO/web:latest
 
@@ -464,17 +474,22 @@ cat packages/shared/package.json | grep '"build"'
 ```
 
 ### Voice chat not working (players can't hear each other)
-WebRTC uses Google STUN servers (`stun.l.google.com`) which are free and require no GCP setup. If players are behind symmetric NAT (corporate networks, some mobile carriers) STUN may fail. In that case you need a TURN relay:
-```
-# Low-cost option: Coturn on a small GCP VM
+Voice uses STUN + a free public TURN relay (`openrelay.metered.ca`) built into the client. This handles most NAT types including symmetric NAT.
+
+**Debug steps:**
+1. Open browser DevTools → Console → look for `[Voice]` log messages
+2. If you see `ICE restart` messages, the TURN relay is being used — this is normal
+3. If `ICE restart failed`, the public TURN server may be down — deploy your own:
+```bash
+# Low-cost option: Coturn on a small GCP VM (~$7/month)
 gcloud compute instances create kadam-turn \
   --machine-type=e2-micro \
   --zone=asia-south1-a \
   --image-family=ubuntu-2204-lts \
   --image-project=ubuntu-os-cloud
-# Then install coturn on the VM and update ICE_SERVERS in useVoiceChat.ts
+# Install coturn, then set _TURN_URL / _TURN_USERNAME / _TURN_CREDENTIAL
+# in your Cloud Build trigger substitution variables
 ```
-For most home/office networks, STUN alone is sufficient.
 
 ### View live logs
 ```bash
@@ -524,22 +539,38 @@ For a private game with friends (low traffic):
 
 ## Voice Chat
 
-Voice chat is **already implemented** using WebRTC peer-to-peer audio, with Socket.IO as the signaling relay. No extra GCP infrastructure is needed for most setups.
+Voice chat is **already implemented** using WebRTC peer-to-peer audio, with Socket.IO as the signaling relay. No extra GCP infrastructure is needed.
 
 **How it works:**
 ```
-Player A ──► stun.l.google.com (free, discover public IP)
-Player B ──► stun.l.google.com
+Player A ──► STUN (discover public IP) + TURN relay (fallback)
+Player B ──► STUN + TURN relay
          │
          └─► Socket.IO on Cloud Run (relay SDP/ICE signals)
                 │
                 ▼
          WebRTC direct audio between A and B (peer-to-peer)
+         Falls back to TURN relay if direct P2P fails
 ```
 
-**GCP cost for voice:** $0 extra. Signaling rides on the existing socket server. Audio is peer-to-peer.
+**Built-in ICE servers (no config needed):**
+- Google STUN servers (`stun.l.google.com`) — free, discovers public IP
+- Public TURN relay (`openrelay.metered.ca`) — UDP, TCP, and TLS on port 443
+- Handles same-network, cross-network, and corporate firewall scenarios out of the box
 
-**If STUN fails (NAT traversal):** Some corporate networks block peer-to-peer connections. Add a TURN server (`coturn` on an `e2-micro` VM, ~$7/month) and update `ICE_SERVERS` in `apps/web/hooks/useVoiceChat.ts`.
+**GCP cost for voice:** $0 extra. Signaling rides on the existing socket server. Audio is peer-to-peer (or relayed through the free public TURN).
+
+**Optional: custom TURN server** for better reliability under heavy use:
+```bash
+# Set via Cloud Build trigger substitution variables:
+#   _TURN_URL       = turn:your-server:3478,turns:your-server:443?transport=tcp
+#   _TURN_USERNAME  = your-user
+#   _TURN_CREDENTIAL = your-pass
+#
+# Or for manual builds, pass as --build-arg to the web Dockerfile.
+```
+
+**ICE restart:** The client automatically restarts ICE when the connection drops (e.g. WiFi to 4G switch), so voice survives network changes.
 
 ---
 
@@ -572,6 +603,9 @@ export SOCKET_URL=$(gcloud run services describe kadam-socket-server \
 docker build -t $REPO/web:latest -f apps/web/Dockerfile \
   --build-arg NEXT_PUBLIC_SOCKET_URL=$SOCKET_URL \
   --build-arg NEXT_PUBLIC_APP_URL=https://placeholder.run.app \
+  --build-arg NEXT_PUBLIC_TURN_URL= \
+  --build-arg NEXT_PUBLIC_TURN_USERNAME= \
+  --build-arg NEXT_PUBLIC_TURN_CREDENTIAL= \
   . && docker push $REPO/web:latest
 
 # Deploy web
