@@ -96,13 +96,13 @@ export function ActionPanel({
 
   const presetBets = [
     { label: 'Min',    amount: minRaise },
-    { label: '½ Pot',  amount: Math.max(minRaise, Math.floor(potSize / 2 / 1000) * 1000) },
+    { label: '½ Pot',  amount: Math.max(minRaise, Math.floor(potSize / 2 / 500) * 500) },
     { label: 'Pot',    amount: Math.max(minRaise, potSize) },
     { label: '2× Pot', amount: Math.min(maxRaise, Math.max(minRaise, potSize * 2)) },
   ];
 
   const handleSliderChange = useCallback((value: number) => {
-    const snapped = snapToStep(value, 1000);
+    const snapped = snapToStep(value, 500);
     setRaiseAmount(Math.min(maxRaise, Math.max(minRaise, snapped)));
   }, [minRaise, maxRaise]);
 
@@ -236,7 +236,7 @@ export function ActionPanel({
                           type="range"
                           min={minRaise}
                           max={maxRaise}
-                          step={1000}
+                          step={500}
                           value={raiseAmount}
                           onChange={(e) => handleSliderChange(Number(e.target.value))}
                           className="raise-slider w-full"

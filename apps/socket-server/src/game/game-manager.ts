@@ -190,7 +190,7 @@ export class GameManager extends EventEmitter {
     managed.betweenHandTimer = setTimeout(async () => {
       managed.betweenHandTimer = null;
       await this.tryStartHand(tableId);
-    }, 15000); // 15 seconds between hands
+    }, 10000); // 10 seconds between hands
   }
 
   private startTurnTimer(tableId: string, managed: ManagedTable, engine: GameEngine): void {

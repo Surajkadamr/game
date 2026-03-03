@@ -104,7 +104,7 @@ export function registerHandlers(io: PokerServer, manager: GameManager, store: M
             socket?.emit('game:your_turn', {
               timeoutAt: Date.now() + state.config.turnTimeoutMs,
               callAmount,
-              minRaise: state.minRaise,
+              minRaise: state.currentBet + state.minRaise,
               maxRaise,
               canCheck,
             });

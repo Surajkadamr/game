@@ -36,7 +36,7 @@ interface TimerState {
   totalMs: number;
 }
 
-const NEXT_HAND_DELAY_S = 15;
+const NEXT_HAND_DELAY_S = 10;
 
 export function PokerTable({ onAction, onLeave }: PokerTableProps) {
   const {
@@ -166,10 +166,10 @@ export function PokerTable({ onAction, onLeave }: PokerTableProps) {
 
   // Winner data
   const mainWinner = winners?.[0] ?? null;
-  const winnerCards = mainWinner
-    ? (winnerShowCards ?? []).find((s) => s.playerId === mainWinner.playerId)
-    : null;
   const hasWinners = !!mainWinner;
+  const isSplitPot = winners && winners.length > 1;
+  const allWinnerNames = winners?.map((w) => w.playerName) ?? [];
+  const totalWinAmount = winners?.reduce((sum, w) => sum + w.amount, 0) ?? 0;
 
   return (
     <div className="relative w-full h-full flex items-center justify-center overflow-hidden">
@@ -235,10 +235,12 @@ export function PokerTable({ onAction, onLeave }: PokerTableProps) {
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.15 }}
-                    className="font-display font-bold text-gold text-lg sm:text-2xl truncate max-w-[180px] sm:max-w-[260px]"
+                    className="font-display font-bold text-gold text-lg sm:text-2xl max-w-[220px] sm:max-w-[300px] text-center"
                     style={{ textShadow: '0 0 20px rgba(201,168,76,0.5)' }}
                   >
-                    {mainWinner.playerName}
+                    {isSplitPot
+                      ? allWinnerNames.join(' & ')
+                      : mainWinner.playerName}
                   </motion.div>
 
                   <motion.div
@@ -247,8 +249,22 @@ export function PokerTable({ onAction, onLeave }: PokerTableProps) {
                     transition={{ delay: 0.25 }}
                     className="text-white font-bold text-base sm:text-xl"
                   >
-                    wins {formatRupees(mainWinner.amount)}
+                    {isSplitPot
+                      ? `split pot ${formatRupees(totalWinAmount)}`
+                      : `wins ${formatRupees(mainWinner.amount)}`}
                   </motion.div>
+
+                  {/* Per-player winnings for split pot */}
+                  {isSplitPot && (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ delay: 0.3 }}
+                      className="text-white/50 text-xs"
+                    >
+                      {formatRupees(mainWinner.amount)} each
+                    </motion.div>
+                  )}
 
                   {/* Hand rank */}
                   {mainWinner.handResult && (
@@ -268,7 +284,7 @@ export function PokerTable({ onAction, onLeave }: PokerTableProps) {
                   )}
 
                   {/* Show/hide cards toggle */}
-                  {winnerCards && winnerCards.cards.length > 0 && (
+                  {winnerShowCards && winnerShowCards.length > 0 && (
                     <motion.div
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
@@ -295,17 +311,29 @@ export function PokerTable({ onAction, onLeave }: PokerTableProps) {
                             initial={{ opacity: 0, height: 0 }}
                             animate={{ opacity: 1, height: 'auto' }}
                             exit={{ opacity: 0, height: 0 }}
-                            className="flex gap-2"
+                            className="flex flex-wrap justify-center gap-3"
                           >
-                            {winnerCards.cards.map((card, i) => (
-                              <Card
-                                key={i}
-                                card={card}
-                                size={isMobile ? 'sm' : 'md'}
-                                revealed
-                                delay={i * 0.12}
-                              />
-                            ))}
+                            {winnerShowCards.map((sc) => {
+                              const w = winners?.find((wi) => wi.playerId === sc.playerId);
+                              return (
+                                <div key={sc.playerId} className="flex flex-col items-center gap-1">
+                                  {isSplitPot && (
+                                    <span className="text-[10px] text-white/40">{w?.playerName}</span>
+                                  )}
+                                  <div className="flex gap-1">
+                                    {sc.cards.map((card, i) => (
+                                      <Card
+                                        key={i}
+                                        card={card}
+                                        size={isMobile ? 'sm' : 'md'}
+                                        revealed
+                                        delay={i * 0.12}
+                                      />
+                                    ))}
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </motion.div>
                         )}
                       </AnimatePresence>

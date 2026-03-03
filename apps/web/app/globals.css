@@ -129,6 +129,7 @@ html, body {
   pointer-events: none;
   white-space: nowrap;
   user-select: none;
+  z-index: 0;
 }
 
 /* ─── Card ───────────────────────────────────────────────────────────────── */
