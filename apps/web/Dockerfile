@@ -13,6 +13,7 @@ RUN npm ci
 FROM base AS shared-builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
+COPY tsconfig.json ./tsconfig.json
 COPY packages/shared ./packages/shared
 RUN cd packages/shared && npm run build
 
@@ -25,17 +26,12 @@ COPY apps/web ./apps/web
 
 ARG NEXT_PUBLIC_SOCKET_URL
 ARG NEXT_PUBLIC_APP_URL
-ARG NEXT_PUBLIC_TURN_URL
-ARG NEXT_PUBLIC_TURN_USERNAME
-ARG NEXT_PUBLIC_TURN_CREDENTIAL
 ENV NEXT_PUBLIC_SOCKET_URL=$NEXT_PUBLIC_SOCKET_URL
 ENV NEXT_PUBLIC_APP_URL=$NEXT_PUBLIC_APP_URL
-ENV NEXT_PUBLIC_TURN_URL=$NEXT_PUBLIC_TURN_URL
-ENV NEXT_PUBLIC_TURN_USERNAME=$NEXT_PUBLIC_TURN_USERNAME
-ENV NEXT_PUBLIC_TURN_CREDENTIAL=$NEXT_PUBLIC_TURN_CREDENTIAL
 ENV NEXT_TELEMETRY_DISABLED=1
 
 WORKDIR /app/apps/web
+RUN mkdir -p public
 RUN npm run build
 
 # Production runner
@@ -47,9 +43,9 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
 
-COPY --from=builder /app/apps/web/public ./public
+COPY --from=builder /app/apps/web/public ./apps/web/public
 COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./apps/web/.next/static
 
 USER nextjs
 EXPOSE 3000
@@ -59,4 +55,4 @@ ENV HOSTNAME="0.0.0.0"
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
   CMD wget -qO- http://localhost:3000/api/health || exit 1
 
-CMD ["node", "server.js"]
+CMD ["node", "apps/web/server.js"]

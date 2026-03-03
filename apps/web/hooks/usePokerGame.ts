@@ -123,12 +123,19 @@ export function usePokerGame() {
         const name = localStorage.getItem('kadam_player_name') ?? '';
         store.setPlayerIdentity(result.playerId, name);
         if (result.gameState) store.setGameState(result.gameState);
+        if (result.voiceToken && result.livekitUrl) {
+          store.setVoiceCredentials(result.voiceToken, result.livekitUrl);
+        }
         // Clear pending create flag
         createTablePendingRef.current = false;
       } else {
         toast.error(result.message ?? 'Failed to join table', { duration: 4000 });
         createTablePendingRef.current = false;
       }
+    };
+
+    const onVoiceToken = ({ voiceToken, livekitUrl }: any) => {
+      store.setVoiceCredentials(voiceToken, livekitUrl);
     };
 
     const onTableCreated = ({ tableId, config }: any) => {
@@ -178,6 +185,7 @@ export function usePokerGame() {
     socket.on('lobby:tables',         onLobbyTables);
     socket.on('error',                onError);
     socket.on('pong',                 onPong);
+    socket.on('voice:token',          onVoiceToken);
 
     if (socket.connected) store.setConnected(true);
 
@@ -204,6 +212,7 @@ export function usePokerGame() {
       socket.off('lobby:tables',         onLobbyTables);
       socket.off('error',                onError);
       socket.off('pong',                 onPong);
+      socket.off('voice:token',          onVoiceToken);
       clearInterval(pingIntervalRef.current);
     };
   }, []); // eslint-disable-line

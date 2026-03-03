@@ -33,12 +33,16 @@ interface GameStore {
   tables: TableSummary[];
   lastAction: string | null;
 
+  voiceToken: string | null;
+  livekitUrl: string | null;
+
   // Actions
   setConnected: (connected: boolean) => void;
   setLatency: (latency: number) => void;
   setPlayerIdentity: (id: string, name: string) => void;
   setPlayerName: (name: string) => void;
   setTableId: (id: string | null) => void;
+  setVoiceCredentials: (token: string, url: string) => void;
   setGameState: (state: GameState) => void;
   setMyHoleCards: (cards: Card[]) => void;
   setIsMyTurn: (isMy: boolean, info?: TurnInfo) => void;
@@ -65,9 +69,12 @@ export const useGameStore = create<GameStore>()(
     winnerShowCards: null,
     tables: [],
     lastAction: null,
+    voiceToken: null,
+    livekitUrl: null,
 
     setConnected: (connected) => set({ isConnected: connected }),
     setLatency: (latency) => set({ latency }),
+    setVoiceCredentials: (token, url) => set({ voiceToken: token, livekitUrl: url }),
 
     setPlayerIdentity: (id, name) => {
       set({ playerId: id, playerName: name });
@@ -138,6 +145,8 @@ export const useGameStore = create<GameStore>()(
         winners: null,
         winnerShowCards: null,
         lastAction: null,
+        voiceToken: null,
+        livekitUrl: null,
       });
     },
   })),

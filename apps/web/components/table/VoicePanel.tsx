@@ -1,6 +1,6 @@
 'use client';
 
-import type { VoicePeer } from '@/hooks/useVoiceChat';
+import type { VoicePeer } from '@/hooks/useTableVoice';
 
 interface VoicePanelProps {
   isInVoice: boolean;
@@ -9,6 +9,7 @@ interface VoicePanelProps {
   voicePeers: VoicePeer[];
   speakingPeers: Set<string>;
   isSpeaking: boolean;
+  isVoiceAvailable: boolean;
   onJoin: () => void;
   onLeave: () => void;
   onToggleMute: () => void;
@@ -35,10 +36,14 @@ export function VoicePanel({
   voicePeers,
   speakingPeers,
   isSpeaking,
+  isVoiceAvailable,
   onJoin,
   onLeave,
   onToggleMute,
 }: VoicePanelProps) {
+  // Hide voice panel entirely if LiveKit is not configured on the server
+  if (!isVoiceAvailable && !isInVoice) return null;
+
   if (!isInVoice) {
     return (
       <button

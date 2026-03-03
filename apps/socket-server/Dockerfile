@@ -13,6 +13,7 @@ RUN npm ci
 FROM base AS shared-builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
+COPY tsconfig.json ./tsconfig.json
 COPY packages/shared ./packages/shared
 RUN cd packages/shared && npm run build
 
@@ -26,7 +27,7 @@ WORKDIR /app/apps/socket-server
 RUN npx prisma generate
 RUN npm run build
 
-# Production image
+# Production image — prune to production deps only
 FROM base AS runner
 WORKDIR /app
 ENV NODE_ENV=production
@@ -34,10 +35,20 @@ ENV NODE_ENV=production
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 appuser
 
+# Copy compiled output
 COPY --from=builder /app/apps/socket-server/dist ./dist
-COPY --from=builder /app/apps/socket-server/node_modules ./node_modules
 COPY --from=builder /app/apps/socket-server/prisma ./prisma
-COPY --from=builder /app/packages/shared/dist ./node_modules/@kadam/shared/dist
+
+# Copy root node_modules (npm workspaces hoists all deps here)
+COPY --from=deps /app/node_modules ./node_modules
+
+# Copy shared package built output into node_modules
+COPY --from=shared-builder /app/packages/shared/dist ./node_modules/@kadam/shared/dist
+COPY --from=shared-builder /app/packages/shared/package.json ./node_modules/@kadam/shared/package.json
+
+# Copy generated Prisma client
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 
 USER appuser
 EXPOSE 3001

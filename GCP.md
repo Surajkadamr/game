@@ -13,20 +13,27 @@ Users (browser/phone)
 │  asia-south1            asia-south1               │
 │  Port 3000              Port 3001                 │
 └──────────────────────────────────────────────────┘
-                          │
-                          ▼
-               ┌─────────────────┐
-               │  Memorystore    │  ← Redis (game state)
-               │  Redis 7        │     (optional, for scale)
-               └─────────────────┘
+           │                        │
+           │                        ▼
+           │              ┌─────────────────┐
+           │              │  Memorystore    │  ← Redis (optional)
+           │              │  Redis 7        │
+           │              └─────────────────┘
+           │
+           ▼
+┌─────────────────────┐
+│  LiveKit Cloud      │  ← Voice chat (SFU)
+│  (managed service)  │     No GCP infra needed
+└─────────────────────┘
 ```
 
 **What we deploy:**
 | Service | Where | Purpose |
 |---|---|---|
 | `kadam-web` | Cloud Run | Next.js frontend |
-| `kadam-socket-server` | Cloud Run | Socket.IO game server |
+| `kadam-socket-server` | Cloud Run | Socket.IO game server + LiveKit token issuer |
 | Redis | Memorystore (optional) | Shared game state across instances |
+| Voice | LiveKit Cloud (external) | WebRTC SFU for voice chat |
 
 **Cloud Run WebSocket note:** Cloud Run fully supports WebSockets. We use `--session-affinity` so each player's connection sticks to one instance. With a single instance (`--max-instances=1`) no Redis is needed — all state lives in memory.
 
@@ -117,9 +124,39 @@ gcloud artifacts repositories list --location=asia-south1
 
 ---
 
-## Step 4 — Store Secrets in Secret Manager
+## Step 4 — Set Up LiveKit Cloud (Voice Chat)
 
-Never put sensitive values in env vars directly. Use Secret Manager.
+LiveKit Cloud is a managed WebRTC SFU service. No GCP infrastructure needed for voice.
+
+### 1. Create a LiveKit Cloud account
+1. Go to https://cloud.livekit.io and sign up
+2. Create a new project (e.g., "Kadam Poker")
+3. From the project dashboard, copy:
+   - **API Key** (e.g., `APIxxxxxxxx`)
+   - **API Secret** (e.g., `xxxxxxxxxxxxxxxxxxxxxxxx`)
+   - **WebSocket URL** (e.g., `wss://kadam-poker-xxxxxxxx.livekit.cloud`)
+
+> **Free tier:** LiveKit Cloud gives 5,000 participant-minutes/month free — plenty for a private poker game with friends.
+
+### 2. Store LiveKit credentials in GCP Secret Manager
+```bash
+# Store API key
+echo -n "APIxxxxxxxx" | \
+  gcloud secrets create kadam-livekit-api-key --data-file=-
+
+# Store API secret
+echo -n "your-livekit-api-secret" | \
+  gcloud secrets create kadam-livekit-api-secret --data-file=-
+
+# Verify
+gcloud secrets versions access latest --secret=kadam-livekit-api-key
+```
+
+The LiveKit URL is not a secret — it's passed as a regular env var.
+
+---
+
+## Step 5 — Store Other Secrets
 
 ```bash
 # JWT Secret (generate a strong random string)
@@ -130,11 +167,11 @@ echo -n "$(openssl rand -base64 32)" | \
 gcloud secrets versions access latest --secret=kadam-jwt-secret
 ```
 
-If you use Redis (Step 11), add the Redis URL secret after creating the instance.
+If you use Redis (Step 12), add the Redis URL secret after creating the instance.
 
 ---
 
-## Step 5 — Set Shell Variables
+## Step 6 — Set Shell Variables
 
 Run these in every terminal session before running deployment commands.
 
@@ -142,11 +179,12 @@ Run these in every terminal session before running deployment commands.
 export PROJECT_ID=kadam-poker-prod
 export REGION=asia-south1
 export REPO=asia-south1-docker.pkg.dev/$PROJECT_ID/kadam
+export LIVEKIT_URL=wss://your-project.livekit.cloud   # from Step 4
 ```
 
 ---
 
-## Step 6 — Build and Push Socket Server Image
+## Step 7 — Build and Push Socket Server Image
 
 Run from the **root of the repo**.
 
@@ -164,7 +202,7 @@ docker push $REPO/socket-server:latest
 
 ---
 
-## Step 7 — Deploy Socket Server to Cloud Run
+## Step 8 — Deploy Socket Server to Cloud Run
 
 Deploy the socket server **first** because the web app needs its URL baked into the build.
 
@@ -181,8 +219,8 @@ gcloud run deploy kadam-socket-server \
   --port=3001 \
   --timeout=3600 \
   --session-affinity \
-  --set-env-vars="NODE_ENV=production,CORS_ORIGIN=*" \
-  --set-secrets="JWT_SECRET=kadam-jwt-secret:latest"
+  --set-env-vars="NODE_ENV=production,CORS_ORIGIN=*,LIVEKIT_URL=$LIVEKIT_URL" \
+  --set-secrets="JWT_SECRET=kadam-jwt-secret:latest,LIVEKIT_API_KEY=kadam-livekit-api-key:latest,LIVEKIT_API_SECRET=kadam-livekit-api-secret:latest"
 ```
 
 **Key flags:**
@@ -191,6 +229,8 @@ gcloud run deploy kadam-socket-server \
 - `--session-affinity` — ensures each player's WebSocket sticks to the same instance
 - `--timeout=3600` — 1-hour timeout for long-running WebSocket connections
 - `CORS_ORIGIN=*` — allows all origins initially; we'll lock it down after web is deployed
+- `LIVEKIT_URL` — LiveKit Cloud WebSocket URL (public, not a secret)
+- `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` — from Secret Manager, used to issue voice tokens
 
 ### Get the socket server URL
 ```bash
@@ -204,7 +244,7 @@ echo "Socket server URL: $SOCKET_URL"
 
 ---
 
-## Step 8 — Build and Push Web Image
+## Step 9 — Build and Push Web Image
 
 The Next.js app bakes the socket URL into the build (`NEXT_PUBLIC_*` vars are compile-time).
 This is why we deploy socket server first.
@@ -215,20 +255,16 @@ docker build \
   -f apps/web/Dockerfile \
   --build-arg NEXT_PUBLIC_SOCKET_URL=$SOCKET_URL \
   --build-arg NEXT_PUBLIC_APP_URL=https://kadam-web-placeholder.run.app \
-  --build-arg NEXT_PUBLIC_TURN_URL= \
-  --build-arg NEXT_PUBLIC_TURN_USERNAME= \
-  --build-arg NEXT_PUBLIC_TURN_CREDENTIAL= \
   .
 
 docker push $REPO/web:latest
 ```
 
 > `NEXT_PUBLIC_APP_URL` is a placeholder for now. We'll update it after the web URL is known. The app doesn't rely on it for core game functionality.
-> The TURN args are optional — leave empty to use the built-in public TURN relay (`openrelay.metered.ca`). Set them if you run your own Coturn server.
 
 ---
 
-## Step 9 — Deploy Web App to Cloud Run
+## Step 10 — Deploy Web App to Cloud Run
 
 ```bash
 gcloud run deploy kadam-web \
@@ -256,7 +292,7 @@ echo "Web URL: $WEB_URL"
 
 ---
 
-## Step 10 — Lock Down CORS
+## Step 11 — Lock Down CORS
 
 Now that both URLs are known, restrict the socket server to only accept requests from the web app:
 
@@ -268,7 +304,7 @@ gcloud run services update kadam-socket-server \
 
 ---
 
-## Step 11 — Test the Deployment
+## Step 12 — Test the Deployment
 
 ### Health checks
 ```bash
@@ -286,11 +322,21 @@ curl -I $WEB_URL
 2. Create a table in tab 1
 3. Join the same table in tab 2
 4. Play a hand — verify betting, all-in, and winner display work
-5. Click **🎙️ Voice** in the header on both tabs — allow mic permission — you should hear each other
+5. Click the mic icon in the header on both tabs — allow mic permission — you should hear each other
+6. Test mute/unmute — the speaking indicator (green glow) should appear when talking
+
+### Voice test checklist
+- [ ] Mic icon appears in the header after joining a table
+- [ ] Clicking mic icon prompts for microphone permission
+- [ ] After allowing, you're connected to voice (peer count badge appears)
+- [ ] Mute button works (shows "MUTED" label when muted)
+- [ ] Green speaking indicator shows when a player talks
+- [ ] Leaving the table disconnects from voice automatically
+- [ ] Voice works on mobile (iOS Safari, Android Chrome)
 
 ---
 
-## Step 12 — (Optional) Add Redis for Multiple Instances
+## Step 13 — (Optional) Add Redis for Multiple Instances
 
 Skip this if you're happy with `--max-instances=1`. Add Redis when you need to scale the socket server to handle more concurrent games.
 
@@ -330,7 +376,7 @@ gcloud run services update kadam-socket-server \
 
 ---
 
-## Step 13 — CI/CD with Cloud Build
+## Step 14 — CI/CD with Cloud Build
 
 The repo already has `cloudbuild.yaml` configured for Artifact Registry. Connect it to GitHub for automatic deployments on every push to `main`.
 
@@ -373,23 +419,21 @@ gcloud projects add-iam-policy-binding $PROJECT_ID \
 5. Under **Substitution variables**, add:
    | Variable | Value |
    |---|---|
-   | `_SOCKET_URL` | your socket server URL (from Step 7) |
-   | `_APP_URL` | your web URL (from Step 9) |
-   | `_TURN_URL` | *(optional)* custom TURN URLs, comma-separated |
-   | `_TURN_USERNAME` | *(optional)* TURN username |
-   | `_TURN_CREDENTIAL` | *(optional)* TURN credential |
+   | `_SOCKET_URL` | your socket server URL (from Step 8) |
+   | `_APP_URL` | your web URL (from Step 10) |
+   | `_LIVEKIT_URL` | your LiveKit Cloud WebSocket URL (from Step 4) |
 6. Click **Create**
 
-> `_SOCKET_URL` and `_APP_URL` are required. The TURN variables are optional — leave blank to use the built-in public TURN relay. After a custom domain is set up (Step 14), update `_SOCKET_URL` and `_APP_URL` in the trigger.
+> `_SOCKET_URL` and `_APP_URL` are required. `_LIVEKIT_URL` is required for voice chat. After a custom domain is set up (Step 15), update all three in the trigger.
 
 After each `git push` to `main`, Cloud Build will automatically:
 1. Build both Docker images in parallel
 2. Push to Artifact Registry
-3. Deploy both services to Cloud Run
+3. Deploy both services to Cloud Run (socket server gets LiveKit secrets)
 
 ---
 
-## Step 14 — Custom Domain (Optional)
+## Step 15 — Custom Domain (Optional)
 
 If you have a domain (e.g., `kadam.poker`):
 
@@ -428,9 +472,6 @@ docker build \
   -f apps/web/Dockerfile \
   --build-arg NEXT_PUBLIC_SOCKET_URL=https://socket.kadam.poker \
   --build-arg NEXT_PUBLIC_APP_URL=https://kadam.poker \
-  --build-arg NEXT_PUBLIC_TURN_URL= \
-  --build-arg NEXT_PUBLIC_TURN_USERNAME= \
-  --build-arg NEXT_PUBLIC_TURN_CREDENTIAL= \
   .
 docker push $REPO/web:latest
 
@@ -473,22 +514,30 @@ cat packages/shared/package.json | grep '"build"'
 # Should show: "build": "tsc"
 ```
 
-### Voice chat not working (players can't hear each other)
-Voice uses STUN + a free public TURN relay (`openrelay.metered.ca`) built into the client. This handles most NAT types including symmetric NAT.
+### Voice chat not working
+Voice uses LiveKit Cloud (managed WebRTC SFU). The socket server generates signed JWT tokens that authorize players to join a voice room.
 
 **Debug steps:**
-1. Open browser DevTools → Console → look for `[Voice]` log messages
-2. If you see `ICE restart` messages, the TURN relay is being used — this is normal
-3. If `ICE restart failed`, the public TURN server may be down — deploy your own:
+1. Check socket server logs for `[Voice] LiveKit configured` at startup
+   - If you see `[Voice] LiveKit NOT configured`, the env vars are missing
+2. Verify secrets are set:
+   ```bash
+   gcloud run services describe kadam-socket-server \
+     --region=$REGION \
+     --format="yaml(spec.template.spec.containers[0].env)"
+   ```
+   Look for `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`
+3. Open browser DevTools → Console → look for `[Voice]` log messages
+4. Check LiveKit Cloud dashboard → your project → Sessions to see if connections are arriving
+5. If mic icon doesn't appear, the server didn't send a `voiceToken` in the join result
+
+**Common fixes:**
 ```bash
-# Low-cost option: Coturn on a small GCP VM (~$7/month)
-gcloud compute instances create kadam-turn \
-  --machine-type=e2-micro \
-  --zone=asia-south1-a \
-  --image-family=ubuntu-2204-lts \
-  --image-project=ubuntu-os-cloud
-# Install coturn, then set _TURN_URL / _TURN_USERNAME / _TURN_CREDENTIAL
-# in your Cloud Build trigger substitution variables
+# Missing LiveKit secrets — re-deploy with secrets
+gcloud run services update kadam-socket-server \
+  --region=$REGION \
+  --set-env-vars="LIVEKIT_URL=$LIVEKIT_URL" \
+  --update-secrets="LIVEKIT_API_KEY=kadam-livekit-api-key:latest,LIVEKIT_API_SECRET=kadam-livekit-api-secret:latest"
 ```
 
 ### View live logs
@@ -529,48 +578,57 @@ For a private game with friends (low traffic):
 | Cloud Run — Web | 0 min instances, 512Mi | ~$0–2 (pay per request) |
 | Cloud Run — Socket | 1 min instance, 1Gi | ~$10–15 (always on) |
 | Artifact Registry | ~1 GB images | ~$0.10 |
+| LiveKit Cloud | Free tier (5,000 min/month) | $0 |
 | Memorystore Redis | 1 GB Basic | ~$16 (if added) |
 | **Total without Redis** | | **~$10–17/month** |
 | **Total with Redis** | | **~$26–33/month** |
 
-> **Free tier:** New GCP accounts get $300 credit. Cloud Run also has a generous free tier (2M requests/month, 360K GB-seconds).
+> **Free tier:** New GCP accounts get $300 credit. Cloud Run also has a generous free tier (2M requests/month, 360K GB-seconds). LiveKit Cloud free tier covers 5,000 participant-minutes/month.
 
 ---
 
 ## Voice Chat
 
-Voice chat is **already implemented** using WebRTC peer-to-peer audio, with Socket.IO as the signaling relay. No extra GCP infrastructure is needed.
+Voice chat uses **LiveKit Cloud**, a managed WebRTC SFU (Selective Forwarding Unit). No GCP infrastructure is needed for voice — LiveKit runs entirely outside your GCP project.
 
 **How it works:**
 ```
-Player A ──► STUN (discover public IP) + TURN relay (fallback)
-Player B ──► STUN + TURN relay
-         │
-         └─► Socket.IO on Cloud Run (relay SDP/ICE signals)
-                │
-                ▼
-         WebRTC direct audio between A and B (peer-to-peer)
-         Falls back to TURN relay if direct P2P fails
+Player joins table
+       │
+       ▼
+Socket Server (Cloud Run)
+  ├─ Generates signed LiveKit JWT token
+  └─ Sends token + LiveKit URL in table:join_result
+       │
+       ▼
+Client (browser)
+  ├─ Connects to LiveKit Cloud using token
+  ├─ Publishes microphone audio
+  └─ Subscribes to other players' audio
+       │
+       ▼
+LiveKit Cloud (SFU)
+  ├─ Routes audio between players at the same table
+  ├─ Handles all WebRTC (ICE/DTLS/codec negotiation)
+  └─ Works on all networks (STUN/TURN built-in)
 ```
 
-**Built-in ICE servers (no config needed):**
-- Google STUN servers (`stun.l.google.com`) — free, discovers public IP
-- Public TURN relay (`openrelay.metered.ca`) — UDP, TCP, and TLS on port 443
-- Handles same-network, cross-network, and corporate firewall scenarios out of the box
+**Key design decisions:**
+- Room name = `tableId` — only players at the same table hear each other
+- Tokens are generated server-side with `livekit-server-sdk` — players can't forge access
+- Audio-only (`canPublishData: false`) — no video, no data channels
+- Token TTL = 6 hours — covers a long poker session
+- Graceful degradation — if LiveKit is not configured, voice panel hides, game works fine
+- Auto-disconnect — leaving the table clears the voice token, disconnecting from LiveKit
 
-**GCP cost for voice:** $0 extra. Signaling rides on the existing socket server. Audio is peer-to-peer (or relayed through the free public TURN).
+**GCP cost for voice:** $0 within LiveKit Cloud free tier. No extra GCP resources needed.
 
-**Optional: custom TURN server** for better reliability under heavy use:
-```bash
-# Set via Cloud Build trigger substitution variables:
-#   _TURN_URL       = turn:your-server:3478,turns:your-server:443?transport=tcp
-#   _TURN_USERNAME  = your-user
-#   _TURN_CREDENTIAL = your-pass
-#
-# Or for manual builds, pass as --build-arg to the web Dockerfile.
-```
-
-**ICE restart:** The client automatically restarts ICE when the connection drops (e.g. WiFi to 4G switch), so voice survives network changes.
+**Socket server env vars for voice:**
+| Variable | Source | Purpose |
+|---|---|---|
+| `LIVEKIT_URL` | Env var | LiveKit Cloud WebSocket URL |
+| `LIVEKIT_API_KEY` | Secret Manager | Signs voice tokens |
+| `LIVEKIT_API_SECRET` | Secret Manager | Signs voice tokens |
 
 ---
 
@@ -581,19 +639,20 @@ Player B ──► STUN + TURN relay
 export PROJECT_ID=kadam-poker-prod
 export REGION=asia-south1
 export REPO=asia-south1-docker.pkg.dev/$PROJECT_ID/kadam
+export LIVEKIT_URL=wss://your-project.livekit.cloud
 
 # Build & push socket server
 docker build -t $REPO/socket-server:latest -f apps/socket-server/Dockerfile . && \
 docker push $REPO/socket-server:latest
 
-# Deploy socket server
+# Deploy socket server (with LiveKit voice)
 gcloud run deploy kadam-socket-server \
   --image=$REPO/socket-server:latest \
   --region=$REGION --allow-unauthenticated \
   --memory=1Gi --min-instances=1 --max-instances=1 \
   --port=3001 --timeout=3600 --session-affinity \
-  --set-env-vars="NODE_ENV=production,CORS_ORIGIN=*" \
-  --set-secrets="JWT_SECRET=kadam-jwt-secret:latest"
+  --set-env-vars="NODE_ENV=production,CORS_ORIGIN=*,LIVEKIT_URL=$LIVEKIT_URL" \
+  --set-secrets="JWT_SECRET=kadam-jwt-secret:latest,LIVEKIT_API_KEY=kadam-livekit-api-key:latest,LIVEKIT_API_SECRET=kadam-livekit-api-secret:latest"
 
 # Get socket URL
 export SOCKET_URL=$(gcloud run services describe kadam-socket-server \
@@ -603,9 +662,6 @@ export SOCKET_URL=$(gcloud run services describe kadam-socket-server \
 docker build -t $REPO/web:latest -f apps/web/Dockerfile \
   --build-arg NEXT_PUBLIC_SOCKET_URL=$SOCKET_URL \
   --build-arg NEXT_PUBLIC_APP_URL=https://placeholder.run.app \
-  --build-arg NEXT_PUBLIC_TURN_URL= \
-  --build-arg NEXT_PUBLIC_TURN_USERNAME= \
-  --build-arg NEXT_PUBLIC_TURN_CREDENTIAL= \
   . && docker push $REPO/web:latest
 
 # Deploy web

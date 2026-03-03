@@ -18,7 +18,7 @@ export function CommunityCards({ cards, pots, round, compact = false }: Communit
   const sidePots = pots.filter((p) => !p.isMain);
 
   return (
-    <div className="flex flex-col items-center gap-3 pointer-events-none">
+    <div className="flex flex-col items-center gap-1.5 sm:gap-3 pointer-events-none">
       {/* Pot Display */}
       <AnimatePresence>
         {totalPot > 0 && (
@@ -41,7 +41,7 @@ export function CommunityCards({ cards, pots, round, compact = false }: Communit
                   key={totalPot}
                   initial={{ scale: 1.1, color: '#e8c875' }}
                   animate={{ scale: 1, color: '#c9a84c' }}
-                  className="font-display font-bold text-xl text-shadow-gold"
+                  className="font-display font-bold text-base sm:text-xl text-shadow-gold"
                   style={{ color: '#c9a84c' }}
                 >
                   {formatRupees(totalPot)}

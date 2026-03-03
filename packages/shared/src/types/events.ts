@@ -37,14 +37,8 @@ export interface ClientToServerEvents {
   /** Ping for latency measurement */
   'ping': (timestamp: number) => void;
 
-  /** Join voice chat room for this table */
-  'voice:join': (payload: { tableId: string }) => void;
-
-  /** Leave voice chat room */
-  'voice:leave': (payload: { tableId: string }) => void;
-
-  /** Relay WebRTC signal (SDP offer/answer or ICE candidate) to a peer */
-  'voice:signal': (payload: { targetPeerId: string; signal: any; isOffer?: boolean }) => void;
+  /** Request a fresh LiveKit voice token for the current table */
+  'voice:token': (payload: { tableId: string }) => void;
 }
 
 // ─── Server → Client Events ────────────────────────────────────────────────
@@ -142,6 +136,8 @@ export interface ServerToClientEvents {
     playerId?: string;
     message?: string;
     gameState?: GameState;
+    voiceToken?: string;
+    livekitUrl?: string;
   }) => void;
 
   /** Pong response */
@@ -158,17 +154,8 @@ export interface ServerToClientEvents {
     timestamp: number;
   }) => void;
 
-  /** List of peers already in voice when you join */
-  'voice:peers': (payload: { peers: { peerId: string; playerName: string }[] }) => void;
-
-  /** A new peer joined voice */
-  'voice:peer_joined': (payload: { peerId: string; playerName: string }) => void;
-
-  /** A peer left voice */
-  'voice:peer_left': (payload: { peerId: string }) => void;
-
-  /** Relayed WebRTC signal from a peer */
-  'voice:signal': (payload: { fromPeerId: string; signal: any; isOffer?: boolean }) => void;
+  /** LiveKit voice token (response to voice:token request) */
+  'voice:token': (payload: { voiceToken: string; livekitUrl: string }) => void;
 }
 
 // ─── Inter-Server Events ───────────────────────────────────────────────────

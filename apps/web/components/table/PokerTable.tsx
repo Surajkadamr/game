@@ -10,7 +10,7 @@ import { ActionPanel } from './ActionPanel';
 import { ParticleBackground } from './ParticleBackground';
 import { VoicePanel } from './VoicePanel';
 import { useGameStore, selectTotalPot } from '@/stores/gameStore';
-import { useVoiceChat } from '@/hooks/useVoiceChat';
+import { useTableVoice } from '@/hooks/useTableVoice';
 import { getSeatPositions, formatRupees } from '@/lib/utils';
 import type { ActionType } from '@kadam/shared';
 
@@ -51,9 +51,8 @@ export function PokerTable({ onAction, onLeave }: PokerTableProps) {
 
   const isMobile = useIsMobile();
 
-  const voiceTableId = gameState?.tableId ?? null;
-  const { isInVoice, isMuted, micError, voicePeers, speakingPeers, isSpeaking, joinVoice, leaveVoice, toggleMute } =
-    useVoiceChat(voiceTableId, playerId ?? null);
+  const { isInVoice, isMuted, micError, voicePeers, speakingPeers, isSpeaking, joinVoice, leaveVoice, toggleMute, isVoiceAvailable } =
+    useTableVoice();
 
   const [timerState, setTimerState] = useState<TimerState | null>(null);
   const [lastActionText, setLastActionText] = useState<string | null>(null);
@@ -205,7 +204,7 @@ export function PokerTable({ onAction, onLeave }: PokerTableProps) {
               cards={communityCards}
               pots={pots}
               round={gameState.round}
-              compact={false}
+              compact={isMobile}
             />
           </div>
 
@@ -426,6 +425,7 @@ export function PokerTable({ onAction, onLeave }: PokerTableProps) {
             voicePeers={voicePeers}
             speakingPeers={speakingPeers}
             isSpeaking={isSpeaking}
+            isVoiceAvailable={isVoiceAvailable}
             onJoin={joinVoice}
             onLeave={leaveVoice}
             onToggleMute={toggleMute}

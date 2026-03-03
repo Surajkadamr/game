@@ -1,11 +1,9 @@
 substitutions:
   _REGION: asia-south1
-  _REPO: asia-south1-docker.pkg.dev/$PROJECT_ID/kadam
+  _TAG: latest            # overridden to $COMMIT_SHA when triggered by git push
   _SOCKET_URL: https://kadam-socket-server-placeholder.run.app  # override at trigger level
   _APP_URL: https://kadam-web-placeholder.run.app               # override at trigger level
-  _TURN_URL: ''         # optional: comma-separated TURN URLs (leave empty to use public fallback)
-  _TURN_USERNAME: ''    # optional: TURN username
-  _TURN_CREDENTIAL: ''  # optional: TURN credential
+  _LIVEKIT_URL: ''      # LiveKit server URL (e.g. wss://your-livekit.example.com)
 
 steps:
   # ── Build socket-server image ────────────────────────────────────────────
@@ -14,9 +12,9 @@ steps:
     args:
       - 'build'
       - '-t'
-      - '${_REPO}/socket-server:$COMMIT_SHA'
+      - 'asia-south1-docker.pkg.dev/$PROJECT_ID/kadam/socket-server:${_TAG}'
       - '-t'
-      - '${_REPO}/socket-server:latest'
+      - 'asia-south1-docker.pkg.dev/$PROJECT_ID/kadam/socket-server:latest'
       - '-f'
       - 'apps/socket-server/Dockerfile'
       - '.'
@@ -27,33 +25,27 @@ steps:
     args:
       - 'build'
       - '-t'
-      - '${_REPO}/web:$COMMIT_SHA'
+      - 'asia-south1-docker.pkg.dev/$PROJECT_ID/kadam/web:${_TAG}'
       - '-t'
-      - '${_REPO}/web:latest'
+      - 'asia-south1-docker.pkg.dev/$PROJECT_ID/kadam/web:latest'
       - '-f'
       - 'apps/web/Dockerfile'
       - '--build-arg'
       - 'NEXT_PUBLIC_SOCKET_URL=${_SOCKET_URL}'
       - '--build-arg'
       - 'NEXT_PUBLIC_APP_URL=${_APP_URL}'
-      - '--build-arg'
-      - 'NEXT_PUBLIC_TURN_URL=${_TURN_URL}'
-      - '--build-arg'
-      - 'NEXT_PUBLIC_TURN_USERNAME=${_TURN_USERNAME}'
-      - '--build-arg'
-      - 'NEXT_PUBLIC_TURN_CREDENTIAL=${_TURN_CREDENTIAL}'
       - '.'
     waitFor: ['-']  # run in parallel with build-socket
 
   # ── Push images ──────────────────────────────────────────────────────────
   - name: 'gcr.io/cloud-builders/docker'
     id: push-socket
-    args: ['push', '--all-tags', '${_REPO}/socket-server']
+    args: ['push', '--all-tags', 'asia-south1-docker.pkg.dev/$PROJECT_ID/kadam/socket-server']
     waitFor: ['build-socket']
 
   - name: 'gcr.io/cloud-builders/docker'
     id: push-web
-    args: ['push', '--all-tags', '${_REPO}/web']
+    args: ['push', '--all-tags', 'asia-south1-docker.pkg.dev/$PROJECT_ID/kadam/web']
     waitFor: ['build-web']
 
   # ── Deploy socket-server to Cloud Run ───────────────────────────────────
@@ -64,7 +56,7 @@ steps:
       - 'run'
       - 'deploy'
       - 'kadam-socket-server'
-      - '--image=${_REPO}/socket-server:$COMMIT_SHA'
+      - '--image=asia-south1-docker.pkg.dev/$PROJECT_ID/kadam/socket-server:${_TAG}'
       - '--region=${_REGION}'
       - '--platform=managed'
       - '--allow-unauthenticated'
@@ -75,8 +67,8 @@ steps:
       - '--port=3001'
       - '--timeout=3600'
       - '--session-affinity'
-      - '--set-env-vars=NODE_ENV=production,CORS_ORIGIN=${_APP_URL}'
-      - '--set-secrets=JWT_SECRET=kadam-jwt-secret:latest'
+      - '--set-env-vars=NODE_ENV=production,CORS_ORIGIN=${_APP_URL},LIVEKIT_URL=${_LIVEKIT_URL}'
+      - '--set-secrets=JWT_SECRET=kadam-jwt-secret:latest,LIVEKIT_API_KEY=kadam-livekit-api-key:latest,LIVEKIT_API_SECRET=kadam-livekit-api-secret:latest'
     waitFor: ['push-socket']
 
   # ── Deploy web to Cloud Run ──────────────────────────────────────────────
@@ -87,7 +79,7 @@ steps:
       - 'run'
       - 'deploy'
       - 'kadam-web'
-      - '--image=${_REPO}/web:$COMMIT_SHA'
+      - '--image=asia-south1-docker.pkg.dev/$PROJECT_ID/kadam/web:${_TAG}'
       - '--region=${_REGION}'
       - '--platform=managed'
       - '--allow-unauthenticated'
@@ -100,8 +92,8 @@ steps:
     waitFor: ['push-web']
 
 images:
-  - '${_REPO}/socket-server:$COMMIT_SHA'
-  - '${_REPO}/web:$COMMIT_SHA'
+  - 'asia-south1-docker.pkg.dev/$PROJECT_ID/kadam/socket-server:${_TAG}'
+  - 'asia-south1-docker.pkg.dev/$PROJECT_ID/kadam/web:${_TAG}'
 
 options:
   logging: CLOUD_LOGGING_ONLY

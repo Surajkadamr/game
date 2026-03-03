@@ -11,25 +11,28 @@ import { GameManager } from '../game/game-manager';
 import type { MemoryGameStore } from '../redis/memory-store';
 import { HandEvent } from '../game/game-engine';
 import { verifyAdminToken } from '../middleware/auth';
+import { isLiveKitConfigured, generateLiveKitToken, getLiveKitUrl } from '../voice/voiceService';
 
 type PokerSocket = Socket<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>;
 type PokerServer = Server<ClientToServerEvents, ServerToClientEvents, InterServerEvents, SocketData>;
 
 export function registerHandlers(io: PokerServer, manager: GameManager, store: MemoryGameStore): void {
-  // tableId → Map<playerId, playerName> for voice rooms
-  const voiceRooms = new Map<string, Map<string, string>>();
+  if (isLiveKitConfigured()) {
+    console.log('[Voice] LiveKit configured — voice tokens will be issued on table join');
+  } else {
+    console.log('[Voice] LiveKit NOT configured — voice chat disabled (set LIVEKIT_API_KEY, LIVEKIT_API_SECRET, LIVEKIT_URL)');
+  }
 
-  function removeFromVoice(socket: PokerSocket): void {
-    const tableId = socket.data.tableId;
-    if (!tableId) return;
-    const room = voiceRooms.get(tableId);
-    if (!room) return;
-    const playerId = socket.data.playerId;
-    if (!room.has(playerId)) return;
-    room.delete(playerId);
-    if (room.size === 0) voiceRooms.delete(tableId);
-    io.to(`table:${tableId}`).emit('voice:peer_left', { peerId: playerId });
-    console.log(`[Voice] ${playerId} left voice in table ${tableId}`);
+  /** Helper: generate voice token payload if LiveKit is configured */
+  async function getVoicePayload(tableId: string, playerId: string, playerName: string) {
+    if (!isLiveKitConfigured()) return {};
+    try {
+      const voiceToken = await generateLiveKitToken(tableId, playerId, playerName);
+      return { voiceToken, livekitUrl: getLiveKitUrl() };
+    } catch (err) {
+      console.error('[Voice] Failed to generate LiveKit token:', err);
+      return {};
+    }
   }
 
   // ─── Game Manager Events → Socket.IO ───────────────────────────────────
@@ -171,12 +174,16 @@ export function registerHandlers(io: PokerServer, manager: GameManager, store: M
       engine.setPlayerConnected(socket.data.playerId, true);
       await store.saveState(savedTableId, engine.getState());
 
+      // Generate voice token for reconnecting player
+      const voicePayload = await getVoicePayload(savedTableId, socket.data.playerId, existingPlayer.name);
+
       // Notify the player they've been reconnected
       socket.emit('table:join_result', {
         success: true,
         tableId: savedTableId,
         playerId: socket.data.playerId,
         gameState: engine.getPublicState(),
+        ...voicePayload,
       });
 
       // Send hole cards if they have them
@@ -265,11 +272,14 @@ export function registerHandlers(io: PokerServer, manager: GameManager, store: M
               await store.setPlayerTable(socket.data.playerId, tableId);
             }
 
+            const voicePayload = await getVoicePayload(tableId, socket.data.playerId, existingPlayer.name);
+
             socket.emit('table:join_result', {
               success: true,
               tableId,
               playerId: socket.data.playerId,
               gameState: engine.getPublicState(),
+              ...voicePayload,
             });
 
             if (existingPlayer.holeCards?.length === 2) {
@@ -300,11 +310,14 @@ export function registerHandlers(io: PokerServer, manager: GameManager, store: M
         await store.setPlayerTable(socket.data.playerId, tableId);
 
         const freshEngine = await manager.getTable(tableId);
+        const voicePayload = await getVoicePayload(tableId, socket.data.playerId, playerName);
+
         socket.emit('table:join_result', {
           success: true,
           tableId,
           playerId: socket.data.playerId,
           gameState: freshEngine?.getPublicState(),
+          ...voicePayload,
         });
 
         socket.to(`table:${tableId}`).emit('player:joined', {
@@ -405,49 +418,20 @@ export function registerHandlers(io: PokerServer, manager: GameManager, store: M
       io.to(`table:${tableId}`).emit('player:left', { playerId, playerName: '', reason: 'kicked' });
     });
 
-    // ─── Voice Chat ───────────────────────────────────────────────────────
+    // ─── Voice Chat (LiveKit token refresh) ───────────────────────────────
 
-    socket.on('voice:join', ({ tableId }) => {
+    socket.on('voice:token', async ({ tableId }) => {
       if (tableId !== socket.data.tableId) return;
-
-      if (!voiceRooms.has(tableId)) voiceRooms.set(tableId, new Map());
-      const room = voiceRooms.get(tableId)!;
-
-      // Send existing peers to the joiner so they can initiate connections
-      const peers = Array.from(room.entries()).map(([peerId, playerName]) => ({ peerId, playerName }));
-      socket.emit('voice:peers', { peers });
-
-      // Add self to room
-      room.set(socket.data.playerId, socket.data.playerName ?? 'Player');
-
-      // Tell existing peers a new peer joined (they wait for that peer's offer)
-      socket.to(`table:${tableId}`).emit('voice:peer_joined', {
-        peerId: socket.data.playerId,
-        playerName: socket.data.playerName ?? 'Player',
-      });
-
-      console.log(`[Voice] ${socket.data.playerId} joined voice in table ${tableId} (${room.size} total)`);
-    });
-
-    socket.on('voice:leave', (_payload) => {
-      removeFromVoice(socket);
-    });
-
-    socket.on('voice:signal', ({ targetPeerId, signal, isOffer }) => {
-      const targetSocket = findSocket(io, targetPeerId);
-      if (!targetSocket) return;
-      targetSocket.emit('voice:signal', {
-        fromPeerId: socket.data.playerId,
-        signal,
-        isOffer,
-      });
+      const payload = await getVoicePayload(tableId, socket.data.playerId, socket.data.playerName ?? 'Player');
+      if (payload.voiceToken) {
+        socket.emit('voice:token', { voiceToken: payload.voiceToken, livekitUrl: payload.livekitUrl! });
+      }
     });
 
     // ─── Disconnect ──────────────────────────────────────────────────────
 
     socket.on('disconnect', async (reason) => {
       console.log(`[Socket] Disconnected: ${socket.id} (${reason})`);
-      removeFromVoice(socket);
       const tableId = socket.data.tableId;
       if (!tableId) return;
 
