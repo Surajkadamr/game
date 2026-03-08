@@ -30,7 +30,8 @@
   box-sizing: border-box;
 }
 
-html, body {
+html,
+body {
   height: 100%;
   margin: 0;
   padding: 0;
@@ -116,7 +117,7 @@ html, body {
 }
 
 .poker-table::after {
-  content: '♠ KADAM ♣';
+  content: 'KADAM';
   position: absolute;
   top: 50%;
   left: 50%;
@@ -158,13 +159,11 @@ html, body {
 
 .card-back {
   background:
-    repeating-linear-gradient(
-      45deg,
+    repeating-linear-gradient(45deg,
       #1a2744 0px,
       #1a2744 3px,
       #152038 3px,
-      #152038 6px
-    );
+      #152038 6px);
   position: relative;
   overflow: hidden;
 }
@@ -276,8 +275,15 @@ html, body {
 }
 
 @keyframes allin-pulse {
-  0%, 100% { box-shadow: 0 0 20px rgba(201, 168, 76, 0.3); }
-  50% { box-shadow: 0 0 35px rgba(201, 168, 76, 0.6); }
+
+  0%,
+  100% {
+    box-shadow: 0 0 20px rgba(201, 168, 76, 0.3);
+  }
+
+  50% {
+    box-shadow: 0 0 35px rgba(201, 168, 76, 0.6);
+  }
 }
 
 /* ─── Slider ─────────────────────────────────────────────────────────────── */
@@ -359,9 +365,11 @@ html, body {
     transform: translate(var(--dealer-x), var(--dealer-y)) scale(0.5) rotate(-5deg);
     opacity: 0;
   }
+
   60% {
     opacity: 1;
   }
+
   100% {
     transform: translate(0, 0) scale(1) rotate(var(--card-rotation, 0deg));
     opacity: 1;
@@ -373,8 +381,15 @@ html, body {
 }
 
 @keyframes pot-pulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.05); }
+
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.05);
+  }
 }
 
 .pot-updated {
@@ -436,7 +451,8 @@ html, body {
 
 /* ─── Touch Improvements ─────────────────────────────────────────────────── */
 
-button, [role="button"] {
+button,
+[role="button"] {
   touch-action: manipulation;
 }
 

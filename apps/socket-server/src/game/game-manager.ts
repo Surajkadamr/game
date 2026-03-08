@@ -8,6 +8,7 @@ type AnyStore = MemoryGameStore;
 interface ManagedTable {
   engine: GameEngine;
   turnTimer: ReturnType<typeof setTimeout> | null;
+  turnTickInterval: ReturnType<typeof setInterval> | null;
   betweenHandTimer: ReturnType<typeof setTimeout> | null;
 }
 
@@ -26,7 +27,7 @@ export class GameManager extends EventEmitter {
 
   async createTable(config: TableConfig): Promise<GameEngine> {
     const engine = new GameEngine(config);
-    this.tables.set(config.id, { engine, turnTimer: null, betweenHandTimer: null });
+    this.tables.set(config.id, { engine, turnTimer: null, turnTickInterval: null, betweenHandTimer: null });
     await this.store.saveState(config.id, engine.getState());
     return engine;
   }
@@ -41,7 +42,7 @@ export class GameManager extends EventEmitter {
     if (!state) return null;
 
     const engine = new GameEngine(state.config, state);
-    this.tables.set(tableId, { engine, turnTimer: null, betweenHandTimer: null });
+    this.tables.set(tableId, { engine, turnTimer: null, turnTickInterval: null, betweenHandTimer: null });
     return engine;
   }
 
@@ -89,8 +90,27 @@ export class GameManager extends EventEmitter {
   }
 
   async leaveTable(tableId: string, playerId: string): Promise<void> {
-    const engine = await this.getTable(tableId);
+    const managed = this.tables.get(tableId);
+    const engine = managed?.engine ?? await this.getTable(tableId);
     if (!engine) return;
+
+    const state = engine.getState();
+    const player = state.players.find((p) => p.id === playerId);
+
+    // If it was this player's turn, auto-fold before removing them
+    if (managed && player && player.seatIndex === state.activePlayerSeatIndex && player.status === 'active') {
+      this.clearTurnTimer(managed);
+      const { events } = engine.processAction({ playerId, action: 'fold' });
+      await this.store.saveState(tableId, engine.getState());
+      await this.emitEventsStaggered(tableId, events);
+
+      const newState = engine.getState();
+      if (newState.phase === 'winner') {
+        this.scheduleNextHand(tableId, managed);
+      } else if (newState.activePlayerSeatIndex !== null) {
+        this.startTurnTimer(tableId, managed, engine);
+      }
+    }
 
     engine.removePlayer(playerId);
     await this.store.saveState(tableId, engine.getState());
@@ -102,11 +122,8 @@ export class GameManager extends EventEmitter {
 
     const { engine } = managed;
 
-    // Clear current turn timer
-    if (managed.turnTimer) {
-      clearTimeout(managed.turnTimer);
-      managed.turnTimer = null;
-    }
+    // Clear current turn timer and tick interval
+    this.clearTurnTimer(managed);
 
     const { events } = engine.processAction(action);
     await this.store.saveState(tableId, engine.getState());
@@ -133,6 +150,8 @@ export class GameManager extends EventEmitter {
     const activePlayer = state.players.find((p) => p.seatIndex === state.activePlayerSeatIndex);
 
     if (!activePlayer || activePlayer.id !== playerId) return;
+
+    this.clearTurnTimer(managed);
 
     const { events } = engine.handleTimeout(playerId);
     await this.store.saveState(tableId, engine.getState());
@@ -193,8 +212,19 @@ export class GameManager extends EventEmitter {
     }, 10000); // 10 seconds between hands
   }
 
+  private clearTurnTimer(managed: ManagedTable): void {
+    if (managed.turnTimer) {
+      clearTimeout(managed.turnTimer);
+      managed.turnTimer = null;
+    }
+    if (managed.turnTickInterval) {
+      clearInterval(managed.turnTickInterval);
+      managed.turnTickInterval = null;
+    }
+  }
+
   private startTurnTimer(tableId: string, managed: ManagedTable, engine: GameEngine): void {
-    if (managed.turnTimer) clearTimeout(managed.turnTimer);
+    this.clearTurnTimer(managed);
 
     const state = engine.getState();
     const timeoutMs = state.config.turnTimeoutMs;
@@ -206,7 +236,7 @@ export class GameManager extends EventEmitter {
 
     // Emit timer ticks every 500ms
     let elapsed = 0;
-    const tickInterval = setInterval(() => {
+    managed.turnTickInterval = setInterval(() => {
       elapsed += 500;
       const remaining = timeoutMs - elapsed;
       this.emit('table_event', {
@@ -216,12 +246,16 @@ export class GameManager extends EventEmitter {
         timeRemainingMs: remaining,
         totalMs: timeoutMs,
       });
-      if (remaining <= 0) clearInterval(tickInterval);
+      if (remaining <= 0) {
+        if (managed.turnTickInterval) {
+          clearInterval(managed.turnTickInterval);
+          managed.turnTickInterval = null;
+        }
+      }
     }, 500);
 
     managed.turnTimer = setTimeout(async () => {
-      clearInterval(tickInterval);
-      managed.turnTimer = null;
+      this.clearTurnTimer(managed);
       await this.handleTimeout(tableId, playerId);
     }, timeoutMs);
   }
@@ -233,7 +267,7 @@ export class GameManager extends EventEmitter {
   async deleteTable(tableId: string): Promise<void> {
     const managed = this.tables.get(tableId);
     if (managed) {
-      if (managed.turnTimer) clearTimeout(managed.turnTimer);
+      this.clearTurnTimer(managed);
       if (managed.betweenHandTimer) clearTimeout(managed.betweenHandTimer);
       this.tables.delete(tableId);
     }

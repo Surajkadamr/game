@@ -20,27 +20,28 @@ export function calculatePots(contributions: PotContribution[]): Pot[] {
   const remaining = active.map((c) => ({ ...c }));
 
   while (remaining.some((c) => c.amount > 0)) {
-    // Find minimum contribution among players still in
-    const minAmount = Math.min(...remaining.filter((c) => c.amount > 0).map((c) => c.amount));
+    // Find minimum contribution among players who still have chips in
+    const withChips = remaining.filter((c) => c.amount > 0);
+    const minAmount = Math.min(...withChips.map((c) => c.amount));
+
+    // Eligible = players who contributed to THIS pot tier (have remaining > 0)
+    const eligiblePlayers = withChips.map((c) => c.playerId);
 
     // Everyone contributes up to minAmount
-    const potAmount = remaining.reduce((sum, c) => {
+    let potAmount = 0;
+    for (const c of remaining) {
       const contrib = Math.min(c.amount, minAmount);
       c.amount -= contrib;
-      return sum + contrib;
-    }, 0);
-
-    // Eligible players are those who contributed to this pot
-    const eligiblePlayers = active
-      .filter((c) => contributions.find((o) => o.playerId === c.playerId)!.amount >= minAmount)
-      .map((c) => c.playerId);
+      potAmount += contrib;
+    }
 
     if (pots.length === 0) {
       pots.push({ amount: potAmount, eligiblePlayers, isMain: true });
     } else {
-      // Merge into existing if same eligible set
+      // Merge into existing if same eligible set (use sorted copies, never mutate originals)
+      const sortedEligible = [...eligiblePlayers].sort();
       const existing = pots.find(
-        (p) => JSON.stringify(p.eligiblePlayers.sort()) === JSON.stringify(eligiblePlayers.sort())
+        (p) => JSON.stringify([...p.eligiblePlayers].sort()) === JSON.stringify(sortedEligible)
       );
       if (existing) {
         existing.amount += potAmount;
@@ -48,16 +49,6 @@ export function calculatePots(contributions: PotContribution[]): Pot[] {
         pots.push({ amount: potAmount, eligiblePlayers, isMain: false });
       }
     }
-
-    // Remove players who have been fully matched
-    remaining.forEach((c) => {
-      if (c.amount === 0) {
-        // Keep in remaining but skip
-      }
-    });
-
-    // Remove players with 0 from further consideration if they went all-in
-    // (they stay eligible for pots they contributed to but can't win new pots)
   }
 
   return pots;

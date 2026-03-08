@@ -177,7 +177,7 @@ export function PokerTable({ onAction, onLeave }: PokerTableProps) {
       <ParticleBackground />
 
       {/* Main Layout — table fills available space between header and action panel */}
-      <div className="relative w-full h-full flex items-center justify-center" style={{ zIndex: 1, paddingTop: 44, paddingBottom: isMobile ? 140 : 0 }}>
+      <div className="relative w-full h-full flex items-center justify-center" style={{ zIndex: 1, paddingTop: isMobile ? 60 : 44, paddingBottom: isMobile ? 100 : 0 }}>
         {/* ─── Poker Table Oval ─────────────────────────────────────────── */}
         {/* The table is the positioning parent for seats — they sit on its edge */}
         <div
@@ -325,7 +325,7 @@ export function PokerTable({ onAction, onLeave }: PokerTableProps) {
                                       <Card
                                         key={i}
                                         card={card}
-                                        size={isMobile ? 'sm' : 'md'}
+                                        size={isMobile ? 'md' : 'md'}
                                         revealed
                                         delay={i * 0.12}
                                       />

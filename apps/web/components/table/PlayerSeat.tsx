@@ -288,7 +288,7 @@ function SeatCards({
             <div key={i} style={{ marginLeft: i > 0 ? -6 : 0 }}>
               <Card
                 card={card}
-                size={compact ? 'xs' : 'sm'}
+                size={compact ? 'sm' : 'sm'}
                 fanned
                 fanIndex={i}
                 isHoverable={isMe}
@@ -301,7 +301,7 @@ function SeatCards({
             <div key={i} style={{ marginLeft: i > 0 ? -6 : 0 }}>
               <Card
                 isBack
-                size={compact ? 'xs' : 'sm'}
+                size={compact ? 'sm' : 'sm'}
                 fanned
                 fanIndex={i}
               />

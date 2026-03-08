@@ -112,7 +112,7 @@ interface CommunityCardSlotProps {
 }
 
 export function CommunityCardSlot({ card, index, revealed = false, compact = false }: CommunityCardSlotProps) {
-  const size = compact ? 'sm' : 'lg';
+  const size = compact ? 'md' : 'lg';
   const { width, height } = SIZE_MAP[size];
 
   if (!card) {

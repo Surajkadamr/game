@@ -191,6 +191,20 @@ export function registerHandlers(io: PokerServer, manager: GameManager, store: M
         socket.emit('game:hole_cards', { cards: existingPlayer.holeCards });
       }
 
+      // Re-send turn info if it's this player's turn
+      if (internalState.activePlayerSeatIndex === existingPlayer.seatIndex && existingPlayer.status === 'active') {
+        const playerBet = internalState.roundBets.get(socket.data.playerId) ?? 0;
+        const elapsed = Date.now() - (internalState.actionStartTime ?? Date.now());
+        const remaining = Math.max(0, internalState.config.turnTimeoutMs - elapsed);
+        socket.emit('game:your_turn', {
+          timeoutAt: Date.now() + remaining,
+          callAmount: Math.max(0, internalState.currentBet - playerBet),
+          minRaise: internalState.currentBet + internalState.minRaise,
+          maxRaise: existingPlayer.chips + playerBet,
+          canCheck: internalState.currentBet <= playerBet,
+        });
+      }
+
       // Notify table
       socket.to(`table:${savedTableId}`).emit('player:reconnected', {
         playerId: socket.data.playerId,
@@ -284,6 +298,20 @@ export function registerHandlers(io: PokerServer, manager: GameManager, store: M
 
             if (existingPlayer.holeCards?.length === 2) {
               socket.emit('game:hole_cards', { cards: existingPlayer.holeCards });
+            }
+
+            // Re-send turn info if it's this player's turn
+            if (internalState.activePlayerSeatIndex === existingPlayer.seatIndex && existingPlayer.status === 'active') {
+              const playerBet = internalState.roundBets.get(socket.data.playerId) ?? 0;
+              const elapsed = Date.now() - (internalState.actionStartTime ?? Date.now());
+              const remaining = Math.max(0, internalState.config.turnTimeoutMs - elapsed);
+              socket.emit('game:your_turn', {
+                timeoutAt: Date.now() + remaining,
+                callAmount: Math.max(0, internalState.currentBet - playerBet),
+                minRaise: internalState.currentBet + internalState.minRaise,
+                maxRaise: existingPlayer.chips + playerBet,
+                canCheck: internalState.currentBet <= playerBet,
+              });
             }
 
             socket.to(`table:${tableId}`).emit('player:reconnected', {
@@ -394,6 +422,20 @@ export function registerHandlers(io: PokerServer, manager: GameManager, store: M
         const player = internalState.players.find((p) => p.id === socket.data.playerId);
         if (player?.holeCards?.length === 2) {
           socket.emit('game:hole_cards', { cards: player.holeCards });
+        }
+
+        // Re-send turn info if it's this player's turn
+        if (player && internalState.activePlayerSeatIndex === player.seatIndex && player.status === 'active') {
+          const playerBet = internalState.roundBets.get(socket.data.playerId) ?? 0;
+          const elapsed = Date.now() - (internalState.actionStartTime ?? Date.now());
+          const remaining = Math.max(0, internalState.config.turnTimeoutMs - elapsed);
+          socket.emit('game:your_turn', {
+            timeoutAt: Date.now() + remaining,
+            callAmount: Math.max(0, internalState.currentBet - playerBet),
+            minRaise: internalState.currentBet + internalState.minRaise,
+            maxRaise: player.chips + playerBet,
+            canCheck: internalState.currentBet <= playerBet,
+          });
         }
       } catch (err) {
         console.error('[Socket] game:sync error:', err);
