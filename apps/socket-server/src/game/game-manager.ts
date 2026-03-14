@@ -97,6 +97,8 @@ export class GameManager extends EventEmitter {
     const state = engine.getState();
     const player = state.players.find((p) => p.id === playerId);
 
+    const handInProgress = state.phase === 'dealing' || state.phase === 'betting' || state.phase === 'showdown';
+
     // If it was this player's turn, auto-fold before removing them
     if (managed && player && player.seatIndex === state.activePlayerSeatIndex && player.status === 'active') {
       this.clearTurnTimer(managed);
@@ -110,6 +112,9 @@ export class GameManager extends EventEmitter {
       } else if (newState.activePlayerSeatIndex !== null) {
         this.startTurnTimer(tableId, managed, engine);
       }
+    } else if (handInProgress && player && player.status === 'active') {
+      // Not their turn but hand is active — mark as folded so game continues properly
+      player.status = 'folded';
     }
 
     engine.removePlayer(playerId);
@@ -258,6 +263,15 @@ export class GameManager extends EventEmitter {
       this.clearTurnTimer(managed);
       await this.handleTimeout(tableId, playerId);
     }, timeoutMs);
+  }
+
+  async requestBuyIn(tableId: string, playerId: string, amount: number): Promise<{ success: boolean; message?: string; pendingAmount?: number }> {
+    const engine = await this.getTable(tableId);
+    if (!engine) return { success: false, message: 'Table not found' };
+
+    const result = engine.requestBuyIn(playerId, amount);
+    await this.store.saveState(tableId, engine.getState());
+    return result;
   }
 
   async getTableList(): Promise<string[]> {

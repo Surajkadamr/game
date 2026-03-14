@@ -97,6 +97,7 @@ export function usePokerGame() {
       store.clearWinners();
       store.setMyHoleCards([]);
       store.clearTurn();
+      store.setPendingBuyIn(null);
     };
 
     const onPlayerJoined = ({ playerName }: any) => {
@@ -136,6 +137,26 @@ export function usePokerGame() {
 
     const onVoiceToken = ({ voiceToken, livekitUrl }: any) => {
       store.setVoiceCredentials(voiceToken, livekitUrl);
+    };
+
+    const onBuyInResult = ({ success, message, pendingAmount }: any) => {
+      if (success) {
+        if (pendingAmount) {
+          store.setPendingBuyIn(pendingAmount);
+          toast.success(message ?? 'Buy-in queued for next hand', { duration: 3000 });
+        } else {
+          store.setPendingBuyIn(null);
+          toast.success(message ?? 'Chips added!', { duration: 3000 });
+        }
+      } else {
+        toast.error(message ?? 'Buy-in failed', { duration: 3000 });
+      }
+    };
+
+    const onBuyInTrackerUpdate = (trackerState: any) => {
+      if (store.gameState) {
+        store.setGameState({ ...store.gameState, buyInTracker: trackerState });
+      }
     };
 
     const onTableCreated = ({ tableId, config }: any) => {
@@ -186,6 +207,8 @@ export function usePokerGame() {
     socket.on('error',                onError);
     socket.on('pong',                 onPong);
     socket.on('voice:token',          onVoiceToken);
+    socket.on('buyin:result',         onBuyInResult);
+    socket.on('buyin:tracker_update', onBuyInTrackerUpdate);
 
     if (socket.connected) store.setConnected(true);
 
@@ -213,6 +236,8 @@ export function usePokerGame() {
       socket.off('error',                onError);
       socket.off('pong',                 onPong);
       socket.off('voice:token',          onVoiceToken);
+      socket.off('buyin:result',         onBuyInResult);
+      socket.off('buyin:tracker_update', onBuyInTrackerUpdate);
       clearInterval(pingIntervalRef.current);
     };
   }, []); // eslint-disable-line
@@ -237,6 +262,7 @@ export function usePokerGame() {
     smallBlind: number;
     bigBlind: number;
     isPrivate: boolean;
+    buyInTrackerEnabled?: boolean;
   }) => {
     const socket = getSocket();
     createTablePendingRef.current = true;
@@ -256,6 +282,11 @@ export function usePokerGame() {
     store.clearTurn();
   }, [store]);
 
+  const requestBuyIn = useCallback((amount: number) => {
+    const socket = getSocket();
+    socket.emit('buyin:request', { amount });
+  }, []);
+
   const fetchLobby = useCallback(() => {
     const socket = getSocket();
     socket.emit('lobby:list');
@@ -267,6 +298,7 @@ export function usePokerGame() {
     createTable,
     leaveTable,
     sendAction,
+    requestBuyIn,
     fetchLobby,
     setPlayerNameLocal,
   };

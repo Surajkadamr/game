@@ -249,6 +249,7 @@ export function registerHandlers(io: PokerServer, manager: GameManager, store: M
           turnTimeoutMs: 30000, // 30-second timer
           isPrivate: payload.isPrivate,
           password: payload.password,
+          buyInTrackerEnabled: payload.buyInTrackerEnabled ?? false,
         };
 
         await manager.createTable(config);
@@ -376,6 +377,15 @@ export function registerHandlers(io: PokerServer, manager: GameManager, store: M
         playerName: socket.data.playerName ?? 'Player',
         reason: 'left',
       });
+
+      // Broadcast updated tracker
+      const engine = await manager.getTable(tableId);
+      if (engine) {
+        const trackerState = engine.getBuyInTrackerState();
+        if (trackerState) {
+          io.to(`table:${tableId}`).emit('buyin:tracker_update', trackerState);
+        }
+      }
     });
 
     // ─── Game Action ─────────────────────────────────────────────────────
@@ -458,6 +468,36 @@ export function registerHandlers(io: PokerServer, manager: GameManager, store: M
       }
       await manager.leaveTable(tableId, playerId);
       io.to(`table:${tableId}`).emit('player:left', { playerId, playerName: '', reason: 'kicked' });
+    });
+
+    // ─── Buy-In Request ────────────────────────────────────────────────────
+
+    socket.on('buyin:request', async ({ amount }) => {
+      try {
+        const tableId = socket.data.tableId;
+        if (!tableId) {
+          socket.emit('buyin:result', { success: false, message: 'Not in a table' });
+          return;
+        }
+
+        const result = await manager.requestBuyIn(tableId, socket.data.playerId, amount);
+        socket.emit('buyin:result', result);
+
+        if (result.success) {
+          const engine = await manager.getTable(tableId);
+          if (engine) {
+            const trackerState = engine.getBuyInTrackerState();
+            if (trackerState) {
+              io.to(`table:${tableId}`).emit('buyin:tracker_update', trackerState);
+            }
+            // Also send updated game state (chip counts may have changed)
+            io.to(`table:${tableId}`).emit('game:state', engine.getPublicState());
+          }
+        }
+      } catch (err) {
+        console.error('[Socket] buyin:request error:', err);
+        socket.emit('buyin:result', { success: false, message: 'Failed to process buy-in' });
+      }
     });
 
     // ─── Voice Chat (LiveKit token refresh) ───────────────────────────────

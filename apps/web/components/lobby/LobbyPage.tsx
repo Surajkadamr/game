@@ -16,6 +16,7 @@ interface LobbyPageProps {
     smallBlind: number;
     bigBlind: number;
     isPrivate: boolean;
+    buyInTrackerEnabled?: boolean;
   }) => void;
   onRefresh: () => void;
   onChangeName: () => void;
@@ -350,6 +351,7 @@ function CreateTableModal({
   const [playerName, setPlayerName] = useState(savedName);
   const [maxPlayers, setMaxPlayers] = useState(6);
   const [blindsPreset, setBlindsPreset] = useState<'5/10' | '10/20' | '25/50' | '50/100'>('5/10');
+  const [buyInTrackerEnabled, setBuyInTrackerEnabled] = useState(false);
 
   const blindsMap = {
     '5/10': { small: 500, big: 1000 },
@@ -368,6 +370,7 @@ function CreateTableModal({
         smallBlind: blinds.small,
         bigBlind: blinds.big,
         isPrivate: false,
+        buyInTrackerEnabled,
       },
       playerName.trim(),
       blinds.big * 10,
@@ -437,6 +440,29 @@ function CreateTableModal({
             <span>6</span>
           </div>
         </FormField>
+
+        {/* Buy-In Tracker Toggle */}
+        <div
+          className="flex items-center justify-between px-4 py-3 rounded-xl glass cursor-pointer hover:glass-gold transition-all"
+          onClick={() => setBuyInTrackerEnabled(!buyInTrackerEnabled)}
+        >
+          <div>
+            <span className="text-sm text-white/80 font-semibold">Buy-In Tracker</span>
+            <p className="text-[11px] text-white/30 mt-0.5">Track buy-ins, rebuys & profit/loss</p>
+          </div>
+          <div
+            className="w-10 h-5 rounded-full relative transition-colors"
+            style={{ background: buyInTrackerEnabled ? 'rgba(201,168,76,0.5)' : 'rgba(255,255,255,0.1)' }}
+          >
+            <div
+              className="absolute top-0.5 w-4 h-4 rounded-full transition-all"
+              style={{
+                background: buyInTrackerEnabled ? '#c9a84c' : 'rgba(255,255,255,0.3)',
+                left: buyInTrackerEnabled ? '22px' : '2px',
+              }}
+            />
+          </div>
+        </div>
       </div>
 
       <div className="flex gap-3 mt-6">

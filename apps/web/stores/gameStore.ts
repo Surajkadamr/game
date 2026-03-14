@@ -2,7 +2,7 @@
 
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
-import type { GameState, Card, WinnerInfo, TableSummary, PublicPlayer } from '@kadam/shared';
+import type { GameState, Card, WinnerInfo, TableSummary, PublicPlayer, BuyInTrackerState } from '@kadam/shared';
 
 interface TurnInfo {
   timeoutAt: number;
@@ -36,6 +36,8 @@ interface GameStore {
   voiceToken: string | null;
   livekitUrl: string | null;
 
+  pendingBuyIn: number | null;
+
   // Actions
   setConnected: (connected: boolean) => void;
   setLatency: (latency: number) => void;
@@ -51,6 +53,7 @@ interface GameStore {
   clearWinners: () => void;
   setTables: (tables: TableSummary[]) => void;
   setLastAction: (action: string | null) => void;
+  setPendingBuyIn: (amount: number | null) => void;
   reset: () => void;
 }
 
@@ -71,6 +74,7 @@ export const useGameStore = create<GameStore>()(
     lastAction: null,
     voiceToken: null,
     livekitUrl: null,
+    pendingBuyIn: null,
 
     setConnected: (connected) => set({ isConnected: connected }),
     setLatency: (latency) => set({ latency }),
@@ -132,6 +136,8 @@ export const useGameStore = create<GameStore>()(
 
     setLastAction: (action) => set({ lastAction: action }),
 
+    setPendingBuyIn: (amount) => set({ pendingBuyIn: amount }),
+
     reset: () => {
       if (typeof window !== 'undefined') {
         localStorage.removeItem('kadam_table_id');
@@ -147,6 +153,7 @@ export const useGameStore = create<GameStore>()(
         lastAction: null,
         voiceToken: null,
         livekitUrl: null,
+        pendingBuyIn: null,
       });
     },
   })),
@@ -169,4 +176,12 @@ export const selectActiveSeatPlayer = (state: GameStore): PublicPlayer | null =>
 export const selectTotalPot = (state: GameStore): number => {
   if (!state.gameState) return 0;
   return state.gameState.pots.reduce((sum, p) => sum + p.amount, 0);
+};
+
+export const selectBuyInTracker = (state: GameStore): BuyInTrackerState | null => {
+  return state.gameState?.buyInTracker ?? null;
+};
+
+export const selectIsBuyInTrackerEnabled = (state: GameStore): boolean => {
+  return state.gameState?.config.buyInTrackerEnabled ?? false;
 };

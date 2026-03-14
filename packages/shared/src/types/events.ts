@@ -1,4 +1,4 @@
-import type { Card, GameState, PlayerAction, TableConfig, TableSummary, WinnerInfo } from './game';
+import type { Card, GameState, PlayerAction, TableConfig, TableSummary, WinnerInfo, BuyInTrackerState } from './game';
 
 // ─── Client → Server Events ────────────────────────────────────────────────
 
@@ -17,7 +17,11 @@ export interface ClientToServerEvents {
     bigBlind: number;
     isPrivate: boolean;
     password?: string;
+    buyInTrackerEnabled?: boolean;
   }) => void;
+
+  /** Request buy-in (rebuy / top-up) */
+  'buyin:request': (payload: { amount: number }) => void;
 
   /** Player action during betting */
   'game:action': (action: PlayerAction) => void;
@@ -156,6 +160,12 @@ export interface ServerToClientEvents {
 
   /** LiveKit voice token (response to voice:token request) */
   'voice:token': (payload: { voiceToken: string; livekitUrl: string }) => void;
+
+  /** Buy-in request result */
+  'buyin:result': (payload: { success: boolean; message?: string; pendingAmount?: number }) => void;
+
+  /** Buy-in tracker state update */
+  'buyin:tracker_update': (payload: BuyInTrackerState) => void;
 }
 
 // ─── Inter-Server Events ───────────────────────────────────────────────────

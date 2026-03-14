@@ -92,6 +92,7 @@ export default function Home() {
     smallBlind: number;
     bigBlind: number;
     isPrivate: boolean;
+    buyInTrackerEnabled?: boolean;
   }) => {
     game.createTable(opts);
     // Auto-join after creation: handled in usePokerGame via table:created event
@@ -114,6 +115,7 @@ export default function Home() {
       <PokerTable
         onAction={(action, amount) => game.sendAction({ action, amount })}
         onLeave={handleLeave}
+        onRequestBuyIn={game.requestBuyIn}
       />
     );
   }

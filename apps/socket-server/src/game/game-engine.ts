@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 import type {
   Card, GameState, Player, PublicPlayer, Pot, BettingRound,
   GamePhase, PlayerAction, ActionType, WinnerInfo, TableConfig,
+  BuyInRecord, BuyInTrackerEntry, BuyInTrackerState,
 } from '@kadam/shared';
 import { freshDeck } from './deck';
 import { evaluateHand, compareHands } from './hand-evaluator';
@@ -13,6 +14,17 @@ export interface InternalPlayer extends Player {
   holeCards: Card[];
   totalBetThisHand: number;
   seatIndex: number;
+}
+
+export interface InternalBuyInEntry {
+  playerName: string;
+  nameKey: string;
+  totalBuyIns: number;
+  currentChips: number;
+  isSeated: boolean;
+  buyInHistory: BuyInRecord[];
+  pendingBuyIn: number;
+  lastPlayerId: string;
 }
 
 export interface InternalGameState {
@@ -33,6 +45,9 @@ export interface InternalGameState {
   lastAction?: PlayerAction;
   roundBets: Map<string, number>; // bets this betting round
   lastRaiseAmount: number;        // size of last raise for min-raise rule
+  deadContributions: { playerId: string; amount: number }[]; // bets from players removed mid-hand
+  buyInTracker: Map<string, InternalBuyInEntry>;  // keyed by lowercase name
+  pendingBuyIns: Map<string, number>;             // playerId → amount
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -86,6 +101,31 @@ export function toPublicPlayer(p: InternalPlayer, showCards = false): PublicPlay
 }
 
 export function toPublicState(state: InternalGameState, showCards = false): GameState {
+  // Compute buy-in tracker if enabled
+  let buyInTracker: BuyInTrackerState | undefined;
+  if (state.config.buyInTrackerEnabled && state.buyInTracker.size > 0) {
+    const entries: BuyInTrackerEntry[] = [];
+    for (const entry of state.buyInTracker.values()) {
+      let currentChips = entry.currentChips;
+      if (entry.isSeated) {
+        const player = state.players.find((p) => p.id === entry.lastPlayerId);
+        if (player) currentChips = player.chips;
+      }
+      entries.push({
+        playerName: entry.playerName,
+        nameKey: entry.nameKey,
+        totalBuyIns: entry.totalBuyIns,
+        currentChips,
+        profitLoss: currentChips - entry.totalBuyIns,
+        isSeated: entry.isSeated,
+        buyInHistory: entry.buyInHistory,
+        pendingBuyIn: entry.pendingBuyIn,
+        lastPlayerId: entry.lastPlayerId,
+      });
+    }
+    buyInTracker = { enabled: true, entries };
+  }
+
   return {
     tableId: state.tableId,
     config: state.config,
@@ -101,6 +141,7 @@ export function toPublicState(state: InternalGameState, showCards = false): Game
     activePlayerSeatIndex: state.activePlayerSeatIndex,
     actionStartTime: state.actionStartTime,
     lastAction: state.lastAction,
+    buyInTracker,
   };
 }
 
@@ -130,6 +171,9 @@ export class GameEngine {
         actionStartTime: null,
         roundBets: new Map(),
         lastRaiseAmount: config.bigBlind,
+        deadContributions: [],
+        buyInTracker: new Map(),
+        pendingBuyIns: new Map(),
       };
     }
   }
@@ -162,12 +206,61 @@ export class GameEngine {
       badge: null,
       hasActed: false,
     });
+
+    // Buy-in tracker
+    if (this.state.config.buyInTrackerEnabled) {
+      const nameKey = name.trim().toLowerCase();
+      const existing = this.state.buyInTracker.get(nameKey);
+      if (existing) {
+        existing.totalBuyIns += chips;
+        existing.currentChips = chips;
+        existing.isSeated = true;
+        existing.lastPlayerId = id;
+        existing.pendingBuyIn = 0;
+        existing.buyInHistory.push({ amount: chips, timestamp: Date.now(), type: 'rebuy' });
+      } else {
+        this.state.buyInTracker.set(nameKey, {
+          playerName: name,
+          nameKey,
+          totalBuyIns: chips,
+          currentChips: chips,
+          isSeated: true,
+          buyInHistory: [{ amount: chips, timestamp: Date.now(), type: 'initial' }],
+          pendingBuyIn: 0,
+          lastPlayerId: id,
+        });
+      }
+    }
+
     return true;
   }
 
   removePlayer(id: string): boolean {
     const idx = this.state.players.findIndex((p) => p.id === id);
     if (idx === -1) return false;
+
+    const player = this.state.players[idx];
+
+    // If a hand is in progress and this player has bet, preserve their contributions
+    // so collectBetsToPot doesn't lose their chips from the pot
+    const handInProgress = this.state.phase !== 'waiting' && this.state.phase !== 'between_hands';
+    if (handInProgress && player.totalBetThisHand > 0) {
+      this.state.deadContributions.push({
+        playerId: player.id,
+        amount: player.totalBetThisHand,
+      });
+    }
+
+    // Buy-in tracker: freeze entry
+    if (this.state.config.buyInTrackerEnabled) {
+      const nameKey = player.name.trim().toLowerCase();
+      const entry = this.state.buyInTracker.get(nameKey);
+      if (entry) {
+        entry.isSeated = false;
+        entry.currentChips = player.chips;
+      }
+    }
+
     this.state.players.splice(idx, 1);
 
     if (this.state.players.filter((p) => p.isConnected).length < 2) {
@@ -190,6 +283,24 @@ export class GameEngine {
   startNewHand(): { events: HandEvent[] } {
     const events: HandEvent[] = [];
     const s = this.state;
+
+    // Process pending buy-ins
+    if (s.config.buyInTrackerEnabled && s.pendingBuyIns.size > 0) {
+      for (const [playerId, amount] of s.pendingBuyIns) {
+        const player = s.players.find((p) => p.id === playerId);
+        if (player) {
+          player.chips += amount;
+          const nameKey = player.name.trim().toLowerCase();
+          const entry = s.buyInTracker.get(nameKey);
+          if (entry) {
+            entry.totalBuyIns += amount;
+            entry.pendingBuyIn = 0;
+            entry.buyInHistory.push({ amount, timestamp: Date.now(), type: 'top_up' });
+          }
+        }
+      }
+      s.pendingBuyIns.clear();
+    }
 
     // Eliminate broke players
     for (const p of s.players) {
@@ -217,6 +328,7 @@ export class GameEngine {
     s.minRaise = s.config.bigBlind;
     s.lastRaiseAmount = s.config.bigBlind;
     s.roundBets = new Map();
+    s.deadContributions = [];
 
     // Reset players
     for (const p of s.players) {
@@ -510,6 +622,11 @@ export class GameEngine {
       }
     }
 
+    // Include contributions from players who were removed mid-hand
+    for (const dead of s.deadContributions) {
+      contributions.push(dead);
+    }
+
     s.pots = calculatePots(contributions);
   }
 
@@ -591,6 +708,70 @@ export class GameEngine {
     events.push({ type: 'hand_ended', winners: winnerInfos, showCards });
 
     return { events };
+  }
+
+  // ─── Buy-In ──────────────────────────────────────────────────────────
+
+  requestBuyIn(playerId: string, amount: number): { success: boolean; message?: string; pendingAmount?: number } {
+    const s = this.state;
+    if (!s.config.buyInTrackerEnabled) return { success: false, message: 'Buy-in tracker not enabled' };
+
+    const player = s.players.find((p) => p.id === playerId);
+    if (!player) return { success: false, message: 'Player not found' };
+
+    if (amount < s.config.bigBlind) return { success: false, message: 'Amount too small' };
+
+    const nameKey = player.name.trim().toLowerCase();
+
+    if (s.phase === 'waiting' || s.phase === 'between_hands') {
+      // Credit immediately
+      player.chips += amount;
+      const entry = s.buyInTracker.get(nameKey);
+      if (entry) {
+        entry.totalBuyIns += amount;
+        entry.currentChips = player.chips;
+        entry.buyInHistory.push({ amount, timestamp: Date.now(), type: 'top_up' });
+      }
+      return { success: true, message: 'Chips added' };
+    }
+
+    // Queue for next hand
+    const existing = s.pendingBuyIns.get(playerId) ?? 0;
+    s.pendingBuyIns.set(playerId, existing + amount);
+
+    const entry = s.buyInTracker.get(nameKey);
+    if (entry) {
+      entry.pendingBuyIn = existing + amount;
+    }
+
+    return { success: true, message: 'Chips will be added at the start of the next hand', pendingAmount: existing + amount };
+  }
+
+  getBuyInTrackerState(): BuyInTrackerState | undefined {
+    if (!this.state.config.buyInTrackerEnabled) return undefined;
+
+    const entries: BuyInTrackerEntry[] = [];
+    for (const entry of this.state.buyInTracker.values()) {
+      // Update live chip count for seated players
+      let currentChips = entry.currentChips;
+      if (entry.isSeated) {
+        const player = this.state.players.find((p) => p.id === entry.lastPlayerId);
+        if (player) currentChips = player.chips;
+      }
+      entries.push({
+        playerName: entry.playerName,
+        nameKey: entry.nameKey,
+        totalBuyIns: entry.totalBuyIns,
+        currentChips,
+        profitLoss: currentChips - entry.totalBuyIns,
+        isSeated: entry.isSeated,
+        buyInHistory: entry.buyInHistory,
+        pendingBuyIn: entry.pendingBuyIn,
+        lastPlayerId: entry.lastPlayerId,
+      });
+    }
+
+    return { enabled: true, entries };
   }
 
   // ─── Timeout Handling ──────────────────────────────────────────────────

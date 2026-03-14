@@ -9,7 +9,8 @@ import { Card } from './Card';
 import { ActionPanel } from './ActionPanel';
 import { ParticleBackground } from './ParticleBackground';
 import { VoicePanel } from './VoicePanel';
-import { useGameStore, selectTotalPot } from '@/stores/gameStore';
+import { BuyInTrackerSidebar } from './BuyInTrackerSidebar';
+import { useGameStore, selectTotalPot, selectBuyInTracker, selectIsBuyInTrackerEnabled } from '@/stores/gameStore';
 import { useTableVoice } from '@/hooks/useTableVoice';
 import { getSeatPositions, formatRupees } from '@/lib/utils';
 import type { ActionType } from '@kadam/shared';
@@ -28,6 +29,7 @@ function useIsMobile() {
 interface PokerTableProps {
   onAction: (action: ActionType, amount?: number) => void;
   onLeave: () => void;
+  onRequestBuyIn: (amount: number) => void;
 }
 
 interface TimerState {
@@ -38,7 +40,7 @@ interface TimerState {
 
 const NEXT_HAND_DELAY_S = 10;
 
-export function PokerTable({ onAction, onLeave }: PokerTableProps) {
+export function PokerTable({ onAction, onLeave, onRequestBuyIn }: PokerTableProps) {
   const {
     gameState,
     playerId,
@@ -47,6 +49,7 @@ export function PokerTable({ onAction, onLeave }: PokerTableProps) {
     turnInfo,
     winners,
     winnerShowCards,
+    pendingBuyIn,
   } = useGameStore();
 
   const isMobile = useIsMobile();
@@ -61,6 +64,8 @@ export function PokerTable({ onAction, onLeave }: PokerTableProps) {
   const confettiFiredRef = useRef(false);
 
   const totalPot = useGameStore(selectTotalPot);
+  const buyInTracker = useGameStore(selectBuyInTracker);
+  const isBuyInTrackerEnabled = useGameStore(selectIsBuyInTrackerEnabled);
 
   // Countdown + confetti when winners appear
   useEffect(() => {
@@ -469,6 +474,17 @@ export function PokerTable({ onAction, onLeave }: PokerTableProps) {
           </button>
         </div>
       </div>
+
+      {/* ─── Buy-In Tracker Sidebar ──────────────────────────────────────── */}
+      {isBuyInTrackerEnabled && buyInTracker && gameState && (
+        <BuyInTrackerSidebar
+          tracker={buyInTracker}
+          config={gameState.config}
+          pendingBuyIn={pendingBuyIn}
+          isMobile={isMobile}
+          onRequestBuyIn={onRequestBuyIn}
+        />
+      )}
 
       {/* ─── Action Panel ─────────────────────────────────────────────────── */}
       <ActionPanel

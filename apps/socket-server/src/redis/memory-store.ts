@@ -11,15 +11,35 @@ export class MemoryGameStore {
   private playerTables = new Map<string, string>();
 
   async saveState(tableId: string, state: InternalGameState): Promise<void> {
-    // Deep-clone the Map so mutations don't affect stored copy
-    const clone = { ...state, roundBets: new Map(state.roundBets) };
+    // Deep-clone Maps so mutations don't affect stored copy
+    const cloneBuyInTracker = new Map<string, any>();
+    for (const [k, v] of state.buyInTracker) {
+      cloneBuyInTracker.set(k, { ...v, buyInHistory: [...v.buyInHistory] });
+    }
+    const clone = {
+      ...state,
+      roundBets: new Map(state.roundBets),
+      deadContributions: state.deadContributions.map((d) => ({ ...d })),
+      buyInTracker: cloneBuyInTracker,
+      pendingBuyIns: new Map(state.pendingBuyIns),
+    };
     this.states.set(tableId, clone);
   }
 
   async loadState(tableId: string): Promise<InternalGameState | null> {
     const s = this.states.get(tableId);
     if (!s) return null;
-    return { ...s, roundBets: new Map(s.roundBets) };
+    const cloneBuyInTracker = new Map<string, any>();
+    for (const [k, v] of s.buyInTracker) {
+      cloneBuyInTracker.set(k, { ...v, buyInHistory: [...v.buyInHistory] });
+    }
+    return {
+      ...s,
+      roundBets: new Map(s.roundBets),
+      deadContributions: s.deadContributions.map((d) => ({ ...d })),
+      buyInTracker: cloneBuyInTracker,
+      pendingBuyIns: new Map(s.pendingBuyIns),
+    };
   }
 
   async deleteState(tableId: string): Promise<void> {

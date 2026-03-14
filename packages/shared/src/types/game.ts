@@ -90,6 +90,31 @@ export interface PlayerAction {
   amount?: number; // paise — required for raise/call
 }
 
+// ─── Buy-In Tracker ───────────────────────────────────────────────────
+
+export interface BuyInRecord {
+  amount: number;       // paise
+  timestamp: number;
+  type: 'initial' | 'rebuy' | 'top_up';
+}
+
+export interface BuyInTrackerEntry {
+  playerName: string;
+  nameKey: string;              // lowercase for matching
+  totalBuyIns: number;          // sum of all buy-ins (paise)
+  currentChips: number;         // live chips or final chips if left
+  profitLoss: number;           // currentChips - totalBuyIns
+  isSeated: boolean;            // still at table?
+  buyInHistory: BuyInRecord[];
+  pendingBuyIn: number;         // queued mid-game buy-in
+  lastPlayerId: string;         // most recent player ID
+}
+
+export interface BuyInTrackerState {
+  enabled: boolean;
+  entries: BuyInTrackerEntry[];
+}
+
 // ─── Table Config ──────────────────────────────────────────────────────────
 
 export interface TableConfig {
@@ -103,6 +128,7 @@ export interface TableConfig {
   turnTimeoutMs: number; // default 15000
   isPrivate: boolean;
   password?: string;
+  buyInTrackerEnabled?: boolean;
 }
 
 // ─── Game State ────────────────────────────────────────────────────────────
@@ -123,6 +149,7 @@ export interface GameState {
   actionStartTime: number | null; // timestamp for timer
   lastAction?: PlayerAction;
   winners?: WinnerInfo[];
+  buyInTracker?: BuyInTrackerState;
 }
 
 // ─── Winner Info ───────────────────────────────────────────────────────────
