@@ -149,7 +149,7 @@ export function PokerTable({ onAction, onLeave, onRequestBuyIn }: PokerTableProp
   const seatPositions = getSeatPositions(
     config.maxPlayers,
     isMobile
-      ? { cx: 50, cy: 50, rx: 46, ry: 46 }
+      ? { cx: 50, cy: 50, rx: 52, ry: 46 }
       : { cx: 50, cy: 50, rx: 48, ry: 47 },
   );
 
@@ -186,20 +186,13 @@ export function PokerTable({ onAction, onLeave, onRequestBuyIn }: PokerTableProp
         {/* ─── Poker Table Oval ─────────────────────────────────────────── */}
         {/* The table is the positioning parent for seats — they sit on its edge */}
         <div
-          className="relative poker-table"
-          style={{
-            width: isMobile ? 'min(78vw, 340px)' : 'min(80vw, 950px)',
-            height: isMobile ? 'min(65vh, 520px)' : 'min(55vh, 540px)',
+          className={`relative poker-table ${isMobile ? 'vertical-oval' : ''}`}
+          style={isMobile ? {} : {
+            width: 'min(80vw, 950px)',
+            height: 'min(55vh, 540px)',
             borderRadius: '50%',
             border: 'none',
-            boxShadow: isMobile
-              ? `
-                0 0 0 6px #1a1a1a,
-                0 0 0 8px rgba(212,175,55,0.12),
-                inset 0 0 50px rgba(0,0,0,0.6),
-                0 10px 30px rgba(0,0,0,0.5)
-              `
-              : `
+            boxShadow: `
                 0 0 0 8px #1a0f08,
                 0 0 0 10px #2c1810,
                 0 0 0 12px rgba(201,168,76,0.15),
@@ -228,8 +221,8 @@ export function PokerTable({ onAction, onLeave, onRequestBuyIn }: PokerTableProp
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="absolute inset-0 flex flex-col items-center justify-center rounded-full"
-                style={{ background: 'rgba(0,0,0,0.75)', zIndex: 15 }}
+                className="absolute inset-0 flex flex-col items-center justify-center"
+                style={{ background: 'rgba(0,0,0,0.75)', zIndex: 15, borderRadius: 'inherit' }}
               >
                 <div className="flex flex-col items-center gap-1.5 px-6 text-center">
                   {/* Trophy + Winner name */}
@@ -374,8 +367,8 @@ export function PokerTable({ onAction, onLeave, onRequestBuyIn }: PokerTableProp
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="absolute inset-0 flex items-center justify-center rounded-full"
-                style={{ background: 'rgba(0,0,0,0.3)' }}
+                className="absolute inset-0 flex items-center justify-center"
+                style={{ background: 'rgba(0,0,0,0.3)', borderRadius: 'inherit' }}
               >
                 <div className="text-center">
                   <div className="text-white/40 text-sm font-semibold uppercase tracking-widest">

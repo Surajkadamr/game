@@ -7,7 +7,8 @@
       "Bash(npm run:*)",
       "Bash(node:*)",
       "Bash(grep:*)",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "Bash(npx turbo:*)"
     ]
   }
 }
