@@ -271,6 +271,15 @@ export class GameManager extends EventEmitter {
 
     const result = engine.requestBuyIn(playerId, amount);
     await this.store.saveState(tableId, engine.getState());
+
+    // If chips were credited immediately (not pending), try to start a new hand.
+    // Skip during 'winner' phase — the scheduled between-hand timer will handle it,
+    // so we don't cut short the winner display.
+    const currentPhase = engine.getState().phase;
+    if (result.success && !result.pendingAmount && currentPhase !== 'winner') {
+      await this.tryStartHand(tableId);
+    }
+
     return result;
   }
 

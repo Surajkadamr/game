@@ -149,7 +149,7 @@ export function PokerTable({ onAction, onLeave, onRequestBuyIn }: PokerTableProp
   const seatPositions = getSeatPositions(
     config.maxPlayers,
     isMobile
-      ? { cx: 50, cy: 50, rx: 48, ry: 48 }
+      ? { cx: 50, cy: 50, rx: 46, ry: 46 }
       : { cx: 50, cy: 50, rx: 48, ry: 47 },
   );
 
@@ -182,25 +182,32 @@ export function PokerTable({ onAction, onLeave, onRequestBuyIn }: PokerTableProp
       <ParticleBackground />
 
       {/* Main Layout — table fills available space between header and action panel */}
-      <div className="relative w-full h-full flex items-center justify-center" style={{ zIndex: 1, paddingTop: isMobile ? 60 : 44, paddingBottom: isMobile ? 100 : 0 }}>
+      <div className="relative w-full h-full flex items-center justify-center" style={{ zIndex: 1, paddingTop: isMobile ? 50 : 44, paddingBottom: isMobile ? 80 : 0 }}>
         {/* ─── Poker Table Oval ─────────────────────────────────────────── */}
         {/* The table is the positioning parent for seats — they sit on its edge */}
         <div
           className="relative poker-table"
           style={{
-            width: isMobile ? 'min(92vw, 420px)' : 'min(80vw, 950px)',
-            height: isMobile ? 'min(58vh, 440px)' : 'min(55vh, 540px)',
+            width: isMobile ? 'min(78vw, 340px)' : 'min(80vw, 950px)',
+            height: isMobile ? 'min(65vh, 520px)' : 'min(55vh, 540px)',
             borderRadius: '50%',
             border: 'none',
-            boxShadow: `
-              0 0 0 8px #1a0f08,
-              0 0 0 10px #2c1810,
-              0 0 0 12px rgba(201,168,76,0.15),
-              0 0 0 14px #1a0f08,
-              inset 0 0 60px rgba(0,0,0,0.5),
-              inset 0 0 20px rgba(201,168,76,0.05),
-              0 20px 80px rgba(0,0,0,0.8)
-            `,
+            boxShadow: isMobile
+              ? `
+                0 0 0 6px #1a1a1a,
+                0 0 0 8px rgba(212,175,55,0.12),
+                inset 0 0 50px rgba(0,0,0,0.6),
+                0 10px 30px rgba(0,0,0,0.5)
+              `
+              : `
+                0 0 0 8px #1a0f08,
+                0 0 0 10px #2c1810,
+                0 0 0 12px rgba(201,168,76,0.15),
+                0 0 0 14px #1a0f08,
+                inset 0 0 60px rgba(0,0,0,0.5),
+                inset 0 0 20px rgba(201,168,76,0.05),
+                0 20px 80px rgba(0,0,0,0.8)
+              `,
           }}
         >
           {/* Table content — community cards centered */}
@@ -433,14 +440,29 @@ export function PokerTable({ onAction, onLeave, onRequestBuyIn }: PokerTableProp
 
       {/* ─── Header Bar ──────────────────────────────────────────────────── */}
       <div
-        className="fixed top-0 left-0 right-0 glass-dark flex items-center px-3 sm:px-4 justify-between"
-        style={{ zIndex: 40, height: 44, borderBottom: '1px solid rgba(255,255,255,0.06)' }}
+        className="fixed top-0 left-0 right-0 flex items-center px-3 sm:px-4 justify-between"
+        style={{
+          zIndex: 40,
+          height: 44,
+          background: 'linear-gradient(to bottom, rgba(0,0,0,0.4), transparent)',
+          borderBottom: '1px solid rgba(255,255,255,0.05)',
+        }}
       >
         {/* Left: brand + table name */}
         <div className="flex items-center gap-1.5 min-w-0 flex-1">
-          <span className="font-display text-gold font-bold text-sm sm:text-lg flex-shrink-0">♠ KADAM</span>
-          <div className="h-3 w-px flex-shrink-0" style={{ background: 'rgba(255,255,255,0.15)' }} />
-          <span className="text-white/40 text-xs truncate">{gameState.config.name}</span>
+          <span
+            className="font-display font-medium text-[13px] sm:text-lg uppercase flex-shrink-0"
+            style={{
+              letterSpacing: '0.25em',
+              background: 'linear-gradient(180deg, #f9e195 0%, #d4af37 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+            }}
+          >
+            Kadam Poker
+          </span>
+          <div className="hidden sm:block h-3 w-px flex-shrink-0" style={{ background: 'rgba(255,255,255,0.15)' }} />
+          <span className="hidden sm:inline text-white/40 text-xs truncate">{gameState.config.name}</span>
         </div>
 
         {/* Center: blinds (desktop only) */}

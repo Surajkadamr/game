@@ -8,13 +8,21 @@ interface PotContribution {
 /**
  * Calculate main pot and side pots from player contributions.
  * Handles all-in situations correctly.
+ *
+ * Only active/all-in players' contributions create pot tiers (side pots).
+ * Dead money (from folded/removed players) is added to the main pot.
  */
-export function calculatePots(contributions: PotContribution[]): Pot[] {
-  if (contributions.length === 0) return [];
-
+export function calculatePots(contributions: PotContribution[], deadMoney: number = 0): Pot[] {
   // Filter out players with 0 contribution
   const active = contributions.filter((c) => c.amount > 0);
-  if (active.length === 0) return [];
+
+  if (active.length === 0) {
+    // Only dead money, no live players with bets
+    if (deadMoney > 0) {
+      return [{ amount: deadMoney, eligiblePlayers: [], isMain: true }];
+    }
+    return [];
+  }
 
   const pots: Pot[] = [];
   const remaining = active.map((c) => ({ ...c }));
@@ -36,7 +44,8 @@ export function calculatePots(contributions: PotContribution[]): Pot[] {
     }
 
     if (pots.length === 0) {
-      pots.push({ amount: potAmount, eligiblePlayers, isMain: true });
+      // Add dead money to the main pot
+      pots.push({ amount: potAmount + deadMoney, eligiblePlayers, isMain: true });
     } else {
       // Merge into existing if same eligible set (use sorted copies, never mutate originals)
       const sortedEligible = [...eligiblePlayers].sort();

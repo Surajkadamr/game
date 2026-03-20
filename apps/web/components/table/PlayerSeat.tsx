@@ -29,7 +29,7 @@ export function PlayerSeat({
   compact = false,
   isSpeaking = false,
 }: PlayerSeatProps) {
-  const avatarSize = compact ? 44 : 56;
+  const avatarSize = compact ? 48 : 56;
   const TIMER_RADIUS = (avatarSize / 2) + 3;
   const TIMER_CIRCUMFERENCE = 2 * Math.PI * TIMER_RADIUS;
   const initials = getInitials(player.name);
@@ -147,14 +147,18 @@ export function PlayerSeat({
           className={cn(
             'relative rounded-full flex items-center justify-center font-bold text-white',
             `bg-gradient-to-br ${avatarGradient}`,
-            isMe && 'ring-2 ring-gold/50',
           )}
           style={{
             width: avatarSize,
             height: avatarSize,
             fontSize: compact ? 13 : 16,
+            border: isMe
+              ? '3px solid #d4af37'
+              : '2px solid rgba(212,175,55,0.3)',
             boxShadow: isEliminated
               ? 'none'
+              : isMe
+              ? '0 4px 16px rgba(0,0,0,0.6), 0 0 0 1px rgba(212,175,55,0.2)'
               : '0 2px 12px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.15)',
           }}
         >
@@ -197,22 +201,26 @@ export function PlayerSeat({
       <div
         className="px-2 py-0.5 rounded-full flex flex-col items-center mt-0.5"
         style={{
-          background: 'rgba(5, 8, 16, 0.85)',
-          border: '1px solid rgba(255,255,255,0.08)',
+          background: isMe ? 'rgba(212,175,55,0.9)' : 'rgba(5, 8, 16, 0.85)',
+          border: isMe ? 'none' : '1px solid rgba(255,255,255,0.08)',
           backdropFilter: 'blur(8px)',
           maxWidth: compact ? 80 : 110,
         }}
       >
         <span
           className="text-[9px] sm:text-[11px] font-semibold truncate leading-tight"
-          style={{ color: isMe ? '#c9a84c' : '#f8f4e8', maxWidth: compact ? 64 : 90 }}
+          style={{
+            color: isMe ? '#121212' : '#f8f4e8',
+            maxWidth: compact ? 64 : 90,
+            fontWeight: isMe ? 700 : 600,
+          }}
           title={player.name}
         >
           {player.name}
         </span>
         <span
           className="text-[9px] sm:text-[10px] font-bold leading-tight"
-          style={{ color: player.chips > 0 ? '#e8c875' : '#6b7280' }}
+          style={{ color: isMe ? '#121212' : player.chips > 0 ? '#e8c875' : '#6b7280' }}
         >
           {formatRupees(player.chips)}
         </span>

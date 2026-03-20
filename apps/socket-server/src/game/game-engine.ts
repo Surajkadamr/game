@@ -21,6 +21,7 @@ export interface InternalBuyInEntry {
   nameKey: string;
   totalBuyIns: number;
   currentChips: number;
+  cashedOut: number;
   isSeated: boolean;
   buyInHistory: BuyInRecord[];
   pendingBuyIn: number;
@@ -104,19 +105,26 @@ export function toPublicState(state: InternalGameState, showCards = false): Game
   // Compute buy-in tracker if enabled
   let buyInTracker: BuyInTrackerState | undefined;
   if (state.config.buyInTrackerEnabled && state.buyInTracker.size > 0) {
+    // During dealing/betting, player.chips doesn't include chips bet into the pot.
+    // Include totalBetThisHand so P&L reflects the player's true position.
+    const handActive = state.phase === 'dealing' || state.phase === 'betting';
     const entries: BuyInTrackerEntry[] = [];
     for (const entry of state.buyInTracker.values()) {
       let currentChips = entry.currentChips;
       if (entry.isSeated) {
         const player = state.players.find((p) => p.id === entry.lastPlayerId);
-        if (player) currentChips = player.chips;
+        if (player) {
+          currentChips = player.chips + (handActive ? player.totalBetThisHand : 0);
+        }
       }
+      const cashedOut = entry.cashedOut ?? 0;
       entries.push({
         playerName: entry.playerName,
         nameKey: entry.nameKey,
         totalBuyIns: entry.totalBuyIns,
         currentChips,
-        profitLoss: currentChips - entry.totalBuyIns,
+        cashedOut,
+        profitLoss: (currentChips + cashedOut) - entry.totalBuyIns,
         isSeated: entry.isSeated,
         buyInHistory: entry.buyInHistory,
         pendingBuyIn: entry.pendingBuyIn,
@@ -212,6 +220,10 @@ export class GameEngine {
       const nameKey = name.trim().toLowerCase();
       const existing = this.state.buyInTracker.get(nameKey);
       if (existing) {
+        // Preserve cashed-out chips from previous sessions for accurate P&L
+        if (!existing.isSeated) {
+          existing.cashedOut += existing.currentChips;
+        }
         existing.totalBuyIns += chips;
         existing.currentChips = chips;
         existing.isSeated = true;
@@ -224,6 +236,7 @@ export class GameEngine {
           nameKey,
           totalBuyIns: chips,
           currentChips: chips,
+          cashedOut: 0,
           isSeated: true,
           buyInHistory: [{ amount: chips, timestamp: Date.now(), type: 'initial' }],
           pendingBuyIn: 0,
@@ -251,13 +264,15 @@ export class GameEngine {
       });
     }
 
-    // Buy-in tracker: freeze entry
+    // Buy-in tracker: freeze entry with current chip count
     if (this.state.config.buyInTrackerEnabled) {
       const nameKey = player.name.trim().toLowerCase();
       const entry = this.state.buyInTracker.get(nameKey);
       if (entry) {
         entry.isSeated = false;
         entry.currentChips = player.chips;
+        // Note: cashedOut is updated when the player rejoins (addPlayer),
+        // so the frozen currentChips value is preserved until then.
       }
     }
 
@@ -285,17 +300,23 @@ export class GameEngine {
     const s = this.state;
 
     // Process pending buy-ins
-    if (s.config.buyInTrackerEnabled && s.pendingBuyIns.size > 0) {
+    if (s.pendingBuyIns.size > 0) {
       for (const [playerId, amount] of s.pendingBuyIns) {
         const player = s.players.find((p) => p.id === playerId);
         if (player) {
           player.chips += amount;
-          const nameKey = player.name.trim().toLowerCase();
-          const entry = s.buyInTracker.get(nameKey);
-          if (entry) {
-            entry.totalBuyIns += amount;
-            entry.pendingBuyIn = 0;
-            entry.buyInHistory.push({ amount, timestamp: Date.now(), type: 'top_up' });
+          // Re-activate eliminated players who now have chips
+          if (player.status === 'eliminated') {
+            player.status = 'sitting_out';
+          }
+          if (s.config.buyInTrackerEnabled) {
+            const nameKey = player.name.trim().toLowerCase();
+            const entry = s.buyInTracker.get(nameKey);
+            if (entry) {
+              entry.totalBuyIns += amount;
+              entry.pendingBuyIn = 0;
+              entry.buyInHistory.push({ amount, timestamp: Date.now(), type: 'top_up' });
+            }
           }
         }
       }
@@ -615,19 +636,26 @@ export class GameEngine {
   private collectBetsToPot(): void {
     const s = this.state;
     const contributions: { playerId: string; amount: number }[] = [];
+    let deadMoney = 0;
 
     for (const p of s.players) {
       if (p.totalBetThisHand > 0) {
-        contributions.push({ playerId: p.id, amount: p.totalBetThisHand });
+        if (p.status === 'active' || p.status === 'all_in') {
+          // Only active/all-in players create pot tiers (side pots)
+          contributions.push({ playerId: p.id, amount: p.totalBetThisHand });
+        } else {
+          // Folded/eliminated players' bets are dead money in the main pot
+          deadMoney += p.totalBetThisHand;
+        }
       }
     }
 
-    // Include contributions from players who were removed mid-hand
+    // Include contributions from players who were removed mid-hand as dead money
     for (const dead of s.deadContributions) {
-      contributions.push(dead);
+      deadMoney += dead.amount;
     }
 
-    s.pots = calculatePots(contributions);
+    s.pots = calculatePots(contributions, deadMoney);
   }
 
   private concludeHand(noShowdown: boolean, existingEvents: HandEvent[] = []): { events: HandEvent[] } {
@@ -723,9 +751,13 @@ export class GameEngine {
 
     const nameKey = player.name.trim().toLowerCase();
 
-    if (s.phase === 'waiting' || s.phase === 'between_hands') {
-      // Credit immediately
+    if (s.phase === 'waiting' || s.phase === 'between_hands' || s.phase === 'winner') {
+      // Credit immediately during non-active phases
       player.chips += amount;
+      // Re-activate eliminated players who now have chips
+      if (player.status === 'eliminated') {
+        player.status = 'sitting_out';
+      }
       const entry = s.buyInTracker.get(nameKey);
       if (entry) {
         entry.totalBuyIns += amount;
@@ -735,7 +767,7 @@ export class GameEngine {
       return { success: true, message: 'Chips added' };
     }
 
-    // Queue for next hand
+    // Queue for next hand (during dealing/betting/showdown)
     const existing = s.pendingBuyIns.get(playerId) ?? 0;
     s.pendingBuyIns.set(playerId, existing + amount);
 
@@ -750,20 +782,25 @@ export class GameEngine {
   getBuyInTrackerState(): BuyInTrackerState | undefined {
     if (!this.state.config.buyInTrackerEnabled) return undefined;
 
+    const handActive = this.state.phase === 'dealing' || this.state.phase === 'betting';
     const entries: BuyInTrackerEntry[] = [];
     for (const entry of this.state.buyInTracker.values()) {
       // Update live chip count for seated players
       let currentChips = entry.currentChips;
       if (entry.isSeated) {
         const player = this.state.players.find((p) => p.id === entry.lastPlayerId);
-        if (player) currentChips = player.chips;
+        if (player) {
+          currentChips = player.chips + (handActive ? player.totalBetThisHand : 0);
+        }
       }
+      const cashedOut = entry.cashedOut ?? 0;
       entries.push({
         playerName: entry.playerName,
         nameKey: entry.nameKey,
         totalBuyIns: entry.totalBuyIns,
         currentChips,
-        profitLoss: currentChips - entry.totalBuyIns,
+        cashedOut,
+        profitLoss: (currentChips + cashedOut) - entry.totalBuyIns,
         isSeated: entry.isSeated,
         buyInHistory: entry.buyInHistory,
         pendingBuyIn: entry.pendingBuyIn,

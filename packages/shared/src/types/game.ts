@@ -103,7 +103,8 @@ export interface BuyInTrackerEntry {
   nameKey: string;              // lowercase for matching
   totalBuyIns: number;          // sum of all buy-ins (paise)
   currentChips: number;         // live chips or final chips if left
-  profitLoss: number;           // currentChips - totalBuyIns
+  cashedOut: number;            // chips cashed out from previous sessions
+  profitLoss: number;           // (currentChips + cashedOut) - totalBuyIns
   isSeated: boolean;            // still at table?
   buyInHistory: BuyInRecord[];
   pendingBuyIn: number;         // queued mid-game buy-in

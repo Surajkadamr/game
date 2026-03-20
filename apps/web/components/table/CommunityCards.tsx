@@ -18,7 +18,7 @@ export function CommunityCards({ cards, pots, round, compact = false }: Communit
   const sidePots = pots.filter((p) => !p.isMain);
 
   return (
-    <div className="flex flex-col items-center gap-1.5 sm:gap-3 pointer-events-none">
+    <div className="flex flex-col items-center gap-1 sm:gap-3 pointer-events-none">
       {/* Pot Display */}
       <AnimatePresence>
         {totalPot > 0 && (
@@ -26,23 +26,23 @@ export function CommunityCards({ cards, pots, round, compact = false }: Communit
             initial={{ opacity: 0, scale: 0.8, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.8, y: 10 }}
-            className="flex flex-col items-center gap-1"
+            className="flex flex-col items-center gap-0.5"
           >
-            <div className="flex items-center gap-2">
-              <ChipStack amount={totalPot} />
-              <div className="flex flex-col">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              {!compact && <ChipStack amount={totalPot} />}
+              <div className="flex flex-col items-center sm:items-start">
                 <span
-                  className="text-xs uppercase tracking-[0.2em] font-semibold"
-                  style={{ color: 'rgba(201, 168, 76, 0.7)' }}
+                  className="text-[9px] sm:text-xs uppercase tracking-[0.2em] font-semibold"
+                  style={{ color: 'rgba(201, 168, 76, 0.6)' }}
                 >
-                  POT
+                  {compact ? 'Total Pot' : 'POT'}
                 </span>
                 <motion.span
                   key={totalPot}
                   initial={{ scale: 1.1, color: '#e8c875' }}
-                  animate={{ scale: 1, color: '#c9a84c' }}
-                  className="font-display font-bold text-base sm:text-xl text-shadow-gold"
-                  style={{ color: '#c9a84c' }}
+                  animate={{ scale: 1, color: compact ? 'rgba(255,255,255,0.9)' : '#c9a84c' }}
+                  className="font-display font-bold text-sm sm:text-xl text-shadow-gold"
+                  style={{ color: compact ? 'rgba(255,255,255,0.9)' : '#c9a84c' }}
                 >
                   {formatRupees(totalPot)}
                 </motion.span>
@@ -51,7 +51,7 @@ export function CommunityCards({ cards, pots, round, compact = false }: Communit
 
             {/* Side pots */}
             {sidePots.map((pot, i) => (
-              <div key={i} className="text-xs text-white/40 font-medium">
+              <div key={i} className="text-[10px] sm:text-xs text-white/40 font-medium">
                 Side Pot {i + 1}: {formatRupees(pot.amount)}
               </div>
             ))}
@@ -60,7 +60,7 @@ export function CommunityCards({ cards, pots, round, compact = false }: Communit
       </AnimatePresence>
 
       {/* Community Cards Row */}
-      <div className="flex items-center gap-1 sm:gap-2">
+      <div className="flex items-center gap-0.5 sm:gap-2">
         {Array.from({ length: 5 }).map((_, i) => (
           <CommunityCardSlot
             key={i}
